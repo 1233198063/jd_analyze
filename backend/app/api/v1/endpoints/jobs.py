@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
@@ -36,9 +37,16 @@ async def submit_job(
 async def list_jobs(
     skip: int = 0,
     limit: int = 50,
+    discovered: bool | None = None,
+    max_age_hours: float | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    jobs = await job_service.list_jobs(db, skip=skip, limit=limit)
+    posted_after = (
+        datetime.now(timezone.utc) - timedelta(hours=max_age_hours) if max_age_hours is not None else None
+    )
+    jobs = await job_service.list_jobs(
+        db, skip=skip, limit=limit, discovered=discovered, posted_after=posted_after
+    )
     result = []
     for job in jobs:
         item = JobListItem(
@@ -47,6 +55,10 @@ async def list_jobs(
             title=job.title or (job.analysis.title if job.analysis else None),
             company_name=job.company_name or (job.analysis.company_name if job.analysis else None),
             source=job.source,
+            discovered=job.discovered,
+            posted_at=job.posted_at,
+            location=job.analysis.location if job.analysis else None,
+            is_remote=job.analysis.is_remote if job.analysis else None,
             created_at=job.created_at,
             overall_score=job.match_score.overall_score if job.match_score else None,
             recommendation=job.match_score.recommendation if job.match_score else None,
@@ -55,7 +67,56 @@ async def list_jobs(
             application_status=job.application.status.value if job.application else None,
         )
         result.append(item)
+    if discovered:
+        now = datetime.now(timezone.utc)
+
+        def rank_key(j: JobListItem) -> float:
+            recency_bonus = 0.0
+            if j.posted_at:
+                days_old = (now - j.posted_at).total_seconds() / 86400
+                recency_bonus = max(0.0, 5.0 - days_old)  # up to +5 pts, fades out over ~5 days
+            return (j.overall_score or 0) + recency_bonus
+
+        result.sort(key=rank_key, reverse=True)
     return result
+
+
+_discovery_state: dict = {"status": "idle", "summary": None}
+
+
+async def _run_discovery_task():
+    from app.core.database import AsyncSessionLocal
+    from app.services.discovery_service import run_discovery
+
+    _discovery_state["status"] = "running"
+    try:
+        async with AsyncSessionLocal() as db:
+            summary = await run_discovery(db)
+            await db.commit()
+        _discovery_state["status"] = "done"
+        _discovery_state["summary"] = summary
+    except Exception as e:
+        _discovery_state["status"] = "error"
+        _discovery_state["summary"] = {"error": str(e)}
+
+
+@router.post("/discover", response_model=dict)
+async def discover_jobs(background_tasks: BackgroundTasks):
+    """
+    Poll seeded companies' Greenhouse/Lever/Ashby boards for postings matching
+    the target-role keywords, score and store any new ones. Safe to re-run —
+    already-seen postings (by URL) are skipped. Runs in the background (a full
+    pass can take minutes) — poll GET /jobs/discover/status for progress.
+    """
+    if _discovery_state["status"] == "running":
+        return {"status": "running"}
+    background_tasks.add_task(_run_discovery_task)
+    return {"status": "started"}
+
+
+@router.get("/discover/status", response_model=dict)
+async def discover_status():
+    return _discovery_state
 
 
 @router.get("/{job_id}", response_model=JobDetailOut)
@@ -63,8 +124,12 @@ async def get_job(job_id: UUID, db: AsyncSession = Depends(get_db)):
     job = await job_service.get_job_detail(db, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    job_out = JobOut.model_validate(job)
+    job_out.application_id = job.application.id if job.application else None
+    job_out.application_status = job.application.status.value if job.application else None
+    job_out.apply_url = job.application.apply_url if job.application else None
     return JobDetailOut(
-        job=JobOut.model_validate(job),
+        job=job_out,
         analysis=job.analysis,
         match_score=job.match_score,
     )

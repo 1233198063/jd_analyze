@@ -10,6 +10,7 @@ class ApplicationCreate(BaseModel):
     job_id: UUID
     status: ApplicationStatus = ApplicationStatus.saved
     notes: Optional[str] = None
+    apply_url: Optional[str] = None
 
 
 class ApplicationUpdate(BaseModel):
@@ -20,6 +21,7 @@ class ApplicationUpdate(BaseModel):
     rejection_reason: Optional[RejectionReason] = None
     rejection_notes: Optional[str] = None
     notes: Optional[str] = None
+    apply_url: Optional[str] = None
 
 
 class TimelineEvent(BaseModel):
@@ -41,6 +43,7 @@ class ApplicationOut(BaseModel):
     rejection_notes: Optional[str]
     timeline: list[dict]
     notes: Optional[str]
+    apply_url: Optional[str]
     created_at: datetime
     updated_at: datetime
 

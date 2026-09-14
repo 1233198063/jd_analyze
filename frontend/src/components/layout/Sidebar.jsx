@@ -3,6 +3,7 @@ import clsx from "clsx";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: "◈" },
+  { to: "/discoveries", label: "Discoveries", icon: "⚡" },
   { to: "/jobs/add", label: "Add JD", icon: "+" },
   { to: "/tracker", label: "Tracker", icon: "⬚" },
   { to: "/resume", label: "Resume", icon: "≡" },

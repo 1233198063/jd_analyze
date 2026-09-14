@@ -23,7 +23,12 @@ class JobOut(BaseModel):
     title: Optional[str]
     company_name: Optional[str]
     source: JobSource
+    discovered: bool
+    posted_at: Optional[datetime]
     created_at: datetime
+    application_id: Optional[UUID] = None
+    application_status: Optional[str] = None
+    apply_url: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -119,6 +124,10 @@ class JobListItem(BaseModel):
     title: Optional[str]
     company_name: Optional[str]
     source: JobSource
+    discovered: bool = False
+    posted_at: Optional[datetime] = None
+    location: Optional[str] = None
+    is_remote: Optional[bool] = None
     created_at: datetime
     overall_score: Optional[float] = None
     recommendation: Optional[Recommendation] = None

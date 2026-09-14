@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import clsx from "clsx";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { SponsorBadge, LevelBadge, AppStatusBadge, RecommendationBadge } from "@/components/common/Badge";
+import { SponsorBadge, LevelBadge, AppStatusBadge, RecommendationBadge, RegionBadge } from "@/components/common/Badge";
 import ScoreRing from "./ScoreRing";
 
 dayjs.extend(relativeTime);
@@ -31,7 +31,7 @@ export default function JobCard({ job }) {
               <p className="text-sm text-gray-600 truncate">{job.company_name || "—"}</p>
             </div>
             <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">
-              {dayjs(job.created_at).fromNow()}
+              {dayjs(job.posted_at || job.created_at).fromNow()}
             </span>
           </div>
 
@@ -40,6 +40,7 @@ export default function JobCard({ job }) {
               <RecommendationBadge recommendation={job.recommendation} score={score} />
             )}
             {job.sponsorship_status && <SponsorBadge status={job.sponsorship_status} />}
+            <RegionBadge location={job.location} isRemote={job.is_remote} />
             {job.application_status && <AppStatusBadge status={job.application_status} />}
           </div>
         </div>

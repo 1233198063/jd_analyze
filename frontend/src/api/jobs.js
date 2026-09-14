@@ -6,4 +6,6 @@ export const jobsApi = {
   get: (id) => client.get(`/jobs/${id}`).then((r) => r.data),
   rescore: (id) => client.post(`/jobs/${id}/rescore`).then((r) => r.data),
   getReferral: (id) => client.get(`/jobs/${id}/referral`).then((r) => r.data),
+  discoverStart: () => client.post("/jobs/discover").then((r) => r.data),
+  discoverStatus: () => client.get("/jobs/discover/status").then((r) => r.data),
 };

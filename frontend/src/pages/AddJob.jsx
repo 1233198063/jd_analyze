@@ -69,7 +69,7 @@ export default function AddJob() {
             />
             <p className="text-xs text-gray-400 mt-1.5">
               Supports Greenhouse, Lever, Ashby, Workday, and generic company pages.
-              LinkedIn is not supported (ToS).
+              LinkedIn and Indeed block scraping — paste the job text for those instead.
             </p>
           </div>
         ) : (

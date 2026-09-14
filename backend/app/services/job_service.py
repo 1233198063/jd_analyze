@@ -3,6 +3,7 @@ Orchestrates: scrape → AI parse → company lookup → score → persist.
 """
 from __future__ import annotations
 import re
+from datetime import datetime
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -55,6 +56,8 @@ def _map_sponsorship(raw: str) -> SponsorshipStatus:
 async def create_job_and_analyze(
     db: AsyncSession,
     payload: JobCreate,
+    discovered: bool = False,
+    posted_at: datetime | None = None,
 ) -> Job:
     """
     Full pipeline:
@@ -75,6 +78,13 @@ async def create_job_and_analyze(
 
     # Step 2: AI parse
     ai_data = ai_parser.parse_job_description(raw_text)
+
+    if not ai_data.get("title") and not ai_data.get("company_name") \
+            and not ai_data.get("tech_stack") and not ai_data.get("required_skills"):
+        raise ValueError(
+            "Could not extract any job details from this page — it may be behind a login wall "
+            "or rendered client-side. Paste the job description text directly instead."
+        )
 
     # Step 3: company lookup
     company = await _get_company(db, ai_data.get("company_name"))
@@ -106,6 +116,8 @@ async def create_job_and_analyze(
         source=source,
         company_name=ai_data.get("company_name"),
         title=ai_data.get("title"),
+        discovered=discovered,
+        posted_at=posted_at,
     )
     db.add(job)
     await db.flush()
@@ -184,8 +196,14 @@ async def get_job_detail(db: AsyncSession, job_id: UUID) -> Job | None:
     return result.scalar_one_or_none()
 
 
-async def list_jobs(db: AsyncSession, skip: int = 0, limit: int = 50) -> list[Job]:
-    result = await db.execute(
+async def list_jobs(
+    db: AsyncSession,
+    skip: int = 0,
+    limit: int = 50,
+    discovered: bool | None = None,
+    posted_after: datetime | None = None,
+) -> list[Job]:
+    query = (
         select(Job)
         .options(
             selectinload(Job.analysis),
@@ -196,4 +214,9 @@ async def list_jobs(db: AsyncSession, skip: int = 0, limit: int = 50) -> list[Jo
         .offset(skip)
         .limit(limit)
     )
+    if discovered is not None:
+        query = query.where(Job.discovered == discovered)
+    if posted_after is not None:
+        query = query.where(Job.posted_at >= posted_after)
+    result = await db.execute(query)
     return list(result.scalars().all())

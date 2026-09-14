@@ -5,6 +5,101 @@ import { applicationsApi } from "@/api/applications";
 import JobCard from "@/components/features/JobCard";
 import { PageLoader } from "@/components/common/Loading";
 
+const SEARCH_KEYWORDS = [
+  "Frontend Software Engineer",
+  "Full-Stack Software Engineer",
+  "Product Engineer",
+  "AI Application Engineer",
+  "AI Agent Engineer",
+  "Agentic Workflow",
+  "AI Tooling",
+  "Developer Platform",
+  "Internal Tools",
+  "AI Platform",
+  "Frontend Infrastructure",
+  "Generative AI",
+  "LLM Applications",
+];
+const SEARCH_LOCATION = "Bay Area";
+const KEYWORD_QUERY = SEARCH_KEYWORDS.map((k) => `"${k}"`).join(" OR ");
+
+function googleSiteSearch(site) {
+  const q = `site:${site} (${KEYWORD_QUERY}) ${SEARCH_LOCATION}`;
+  return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
+}
+
+const URL_SOURCES = [
+  { label: "Greenhouse", href: googleSiteSearch("boards.greenhouse.io") },
+  { label: "Lever", href: googleSiteSearch("jobs.lever.co") },
+  { label: "Ashby", href: googleSiteSearch("jobs.ashbyhq.com") },
+  { label: "Workday", href: googleSiteSearch("myworkdayjobs.com") },
+  {
+    label: "Company career page",
+    href: `https://www.google.com/search?q=${encodeURIComponent(
+      `(${KEYWORD_QUERY}) ${SEARCH_LOCATION} careers`
+    )}&ibp=htl;jobs`,
+  },
+];
+
+const TEXT_ONLY_SOURCES = [
+  {
+    label: "LinkedIn",
+    href: `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(
+      `(${KEYWORD_QUERY})`
+    )}&location=${encodeURIComponent(SEARCH_LOCATION)}`,
+  },
+  {
+    label: "Indeed",
+    href: `https://www.indeed.com/jobs?q=${encodeURIComponent(KEYWORD_QUERY)}&l=${encodeURIComponent(
+      SEARCH_LOCATION
+    )}`,
+  },
+];
+
+function SourcePill({ label, href }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="px-3 py-1 rounded-full text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-colors"
+    >
+      {label} ↗
+    </a>
+  );
+}
+
+function SourcesCard() {
+  return (
+    <div className="card p-5">
+      <p className="text-sm font-semibold text-gray-800 mb-1">Search by Source</p>
+      <p className="text-xs text-gray-400 mb-3">
+        Opens a search on that site for your target roles — copy any posting's URL or text back into "Analyze JD".
+      </p>
+      <div className="space-y-3">
+        <div>
+          <p className="text-xs text-gray-500 mb-1.5">✓ Their listing URLs work directly with the analyzer</p>
+          <div className="flex flex-wrap gap-1.5">
+            {URL_SOURCES.map((s) => (
+              <SourcePill key={s.label} label={s.label} href={s.href} />
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500 mb-1.5">
+            ✗ Blocks scraping — paste the job text instead of the URL
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {TEXT_ONLY_SOURCES.map((s) => (
+              <SourcePill key={s.label} label={s.label} href={s.href} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StatCard({ label, value, sub, color = "blue" }) {
   const colors = {
     blue: "text-blue-600",
@@ -72,6 +167,8 @@ export default function Dashboard() {
         <StatCard label="Applied" value={applied} color="blue" />
         <StatCard label="Interviews" value={interviews} color="green" />
       </div>
+
+      <SourcesCard />
 
       {/* Top priority jobs */}
       {prioritized.length > 0 && (

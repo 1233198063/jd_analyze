@@ -53,7 +53,7 @@ Return exactly this JSON structure (no other text):
   }},
   "red_flags": [
     {{
-      "flag": "description",
+      "flag": "a specific sentence explaining the concern, e.g. 'Requires 5+ years but titled Entry-Level' — never the literal word description",
       "severity": one of ["high", "medium", "low"],
       "category": one of ["sponsorship", "level_mismatch", "vague_req", "culture", "contract", "other"]
     }}
