@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.schemas.job import JobCreate, JobDetailOut, JobListItem, JobOut, ResumeMatchScoreOut
 from app.schemas.resume import ReferralMessageOut
 from app.services import job_service, ai_parser
+from app.services.skills import normalize_skill_terms
 from app.models.job import Job
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -189,8 +190,8 @@ async def get_referral_message(job_id: UUID, db: AsyncSession = Depends(get_db))
     resume_skills = resume.skills if resume else []
 
     skill_overlap = list(
-        set(s.lower() for s in analysis.required_skills + analysis.tech_stack)
-        & set(s.lower() for s in resume_skills)
+        normalize_skill_terms(analysis.required_skills + analysis.tech_stack)
+        & normalize_skill_terms(resume_skills)
     )[:5]
 
     top_skills = ", ".join(resume_skills[:4]) if resume_skills else "React, TypeScript, Python"

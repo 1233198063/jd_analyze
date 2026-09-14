@@ -15,6 +15,7 @@ import re
 from dataclasses import dataclass, field
 
 from app.core.config import settings
+from app.services.skills import normalize_skill_terms
 from app.models.job import SponsorshipStatus, JobLevel, Recommendation
 from app.models.company import CompanySize
 
@@ -252,9 +253,9 @@ def _score_skills(
     resume_matched_skills: list[str],
 ) -> float:
     """Skills match score (max 20) based on target skills and resume overlap."""
-    all_jd_skills = set(s.lower() for s in required_skills + tech_stack)
-    target = set(s.lower() for s in settings.TARGET_SKILLS)
-    resume = set(s.lower() for s in resume_matched_skills)
+    all_jd_skills = normalize_skill_terms(required_skills + tech_stack)
+    target = normalize_skill_terms(settings.TARGET_SKILLS)
+    resume = normalize_skill_terms(resume_matched_skills)
 
     # Points for JD requiring our target skills
     target_in_jd = target & all_jd_skills
