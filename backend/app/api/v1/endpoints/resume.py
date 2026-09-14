@@ -7,25 +7,9 @@ from app.core.database import get_db
 from app.models.resume import Resume
 from app.schemas.resume import ResumeCreate, ResumeUpdate, ResumeOut
 from app.services.ai_parser import parse_job_description
+from app.services.skills import extract_skills_from_text as _extract_skills
 
 router = APIRouter(prefix="/resume", tags=["resume"])
-
-
-def _extract_skills(raw_text: str) -> list[str]:
-    """Quick keyword extraction for skills from resume text."""
-    import re
-    skill_patterns = [
-        r"\b(React|TypeScript|JavaScript|Node\.?js|Python|SQL|PostgreSQL|MySQL|MongoDB|"
-        r"FastAPI|Django|Flask|Next\.?js|Vue|Angular|GraphQL|REST|Docker|Kubernetes|"
-        r"AWS|GCP|Azure|Git|GitHub|CI/CD|TailwindCSS|CSS|HTML|Java|Go|Rust|C\+\+|"
-        r"Redis|Celery|Pandas|NumPy|PyTorch|TensorFlow|LangChain|OpenAI|Claude|"
-        r"Prisma|SQLAlchemy|Alembic|Vercel|Railway|Linux|Bash|Figma|Jira)\b"
-    ]
-    found = set()
-    for pattern in skill_patterns:
-        matches = re.findall(pattern, raw_text, re.IGNORECASE)
-        found.update(m.strip() for m in matches)
-    return sorted(found, key=str.lower)
 
 
 @router.post("/", response_model=ResumeOut)
