@@ -56,6 +56,18 @@ function AppCard({ item, colStatus }) {
         <p className="text-xs text-gray-400">Applied {dayjs(item.applied_at).format("MMM D")}</p>
       )}
 
+      {item.apply_url && (
+        <a
+          href={item.apply_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-blue-600 hover:underline inline-block"
+          onClick={(e) => e.stopPropagation()}
+        >
+          投递链接 ↗
+        </a>
+      )}
+
       {colStatus === "rejected" && (
         <select
           className="input text-xs mt-1"

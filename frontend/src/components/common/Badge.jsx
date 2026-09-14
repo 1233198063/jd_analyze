@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { getRegionLabel } from "@/utils/region";
 
 const VARIANTS = {
   green: "bg-green-100 text-green-700",
@@ -44,6 +45,14 @@ export function LevelBadge({ level }) {
     unknown: "gray",
   };
   return <Badge variant={colors[level] || "gray"}>{level}</Badge>;
+}
+
+export function RegionBadge({ location, isRemote }) {
+  const label = getRegionLabel(location, isRemote);
+  if (!label) return null;
+  if (label === "US") return <Badge variant="blue">🇺🇸 US</Badge>;
+  if (label === "Remote") return <Badge variant="blue">Remote</Badge>;
+  return <Badge variant="purple">🌐 {label}</Badge>;
 }
 
 export function AppStatusBadge({ status }) {

@@ -11,6 +11,7 @@ Scoring weights (total = 100):
   Product direction fit                10
 """
 from __future__ import annotations
+import re
 from dataclasses import dataclass, field
 
 from app.core.config import settings
@@ -55,6 +56,62 @@ class ScoreBreakdown:
         return f"Weak match ({self.total:.0f}/100). Skip unless you have a strong reason to apply."
 
 
+# (label, keywords, allowed) — allowed=False hard-rejects the role (irrelevant to
+# US H-1B/OPT sponsorship). Deliberately excludes ambiguous single words that
+# collide with US places or names (e.g. "Georgia", "Jordan").
+LOCATION_REGIONS: list[tuple[str, list[str], bool]] = [
+    ("China", ["china", "shanghai", "beijing", "shenzhen", "greater china"], True),
+    ("UK", ["united kingdom", "london", "uk"], False),
+    ("Canada", ["canada", "toronto", "vancouver", "montreal"], False),
+    ("India", ["india", "bengaluru", "bangalore", "hyderabad", "mumbai", "delhi", "pune", "chennai"], False),
+    ("Germany", ["germany", "berlin", "munich"], False),
+    ("Ireland", ["ireland", "dublin"], False),
+    ("Singapore", ["singapore"], False),
+    ("Australia", ["australia", "sydney", "melbourne"], False),
+    ("Japan", ["japan", "tokyo"], False),
+    ("Poland", ["poland", "warsaw", "krakow"], False),
+    ("Netherlands", ["netherlands", "amsterdam"], False),
+    ("France", ["france", "paris"], False),
+    ("Spain", ["spain", "madrid", "barcelona"], False),
+    ("Italy", ["italy", "milan"], False),
+    ("Switzerland", ["switzerland", "zurich"], False),
+    ("Sweden", ["sweden", "stockholm"], False),
+    ("Portugal", ["portugal", "lisbon"], False),
+    ("Brazil", ["brazil", "sao paulo"], False),
+    ("Mexico", ["mexico"], False),
+    ("Colombia", ["colombia", "bogota"], False),
+    ("Argentina", ["argentina", "buenos aires"], False),
+    ("Chile", ["chile", "santiago"], False),
+    ("Romania", ["romania", "bucharest"], False),
+    ("Ukraine", ["ukraine", "kyiv"], False),
+    ("Israel", ["israel", "tel aviv"], False),
+    ("Philippines", ["philippines", "manila"], False),
+    ("South Korea", ["south korea", "seoul"], False),
+    ("Vietnam", ["vietnam", "hanoi"], False),
+    ("Indonesia", ["indonesia", "jakarta"], False),
+    ("Malaysia", ["malaysia", "kuala lumpur"], False),
+    ("Hong Kong", ["hong kong"], False),
+    ("Taiwan", ["taiwan", "taipei"], False),
+    ("New Zealand", ["new zealand", "auckland"], False),
+    ("Egypt", ["egypt", "cairo"], False),
+    ("South Africa", ["south africa"], False),
+    ("APAC", ["apjc", "apac"], False),
+    ("EMEA", ["emea"], False),
+    ("LATAM", ["latam"], False),
+]
+
+
+def detect_region(location: str | None) -> tuple[str, bool] | None:
+    """Returns (label, allowed) if the location matches a known non-US region, else None."""
+    if not location:
+        return None
+    loc_lower = location.lower()
+    for label, keywords, allowed in LOCATION_REGIONS:
+        if any(re.search(rf"\b{re.escape(kw)}\b", loc_lower) for kw in keywords):
+            return label, allowed
+    return None
+
+
 def _check_auto_reject(
     analysis: dict,
     jd_text_lower: str,
@@ -64,6 +121,13 @@ def _check_auto_reject(
     Returns (is_rejected, reasons).
     """
     reasons = []
+
+    # 0. Non-US location (irrelevant to H-1B/OPT sponsorship). Checked regardless of
+    # is_remote — a role can be "remote" but still restricted to a specific country
+    # (e.g. "Remote Spain"), which is exactly the case this needs to catch.
+    region = detect_region(analysis.get("location"))
+    if region and not region[1]:
+        reasons.append(f"Non-US location: {region[0]} ('{analysis.get('location')}')")
 
     # 1. Explicit no-sponsorship language
     for pattern in settings.NO_SPONSOR_PATTERNS:
@@ -90,6 +154,20 @@ def _check_auto_reject(
     years_min = analysis.get("years_experience", {}).get("min") or 0
     if years_min >= 4:
         reasons.append(f"Requires {years_min}+ years of experience")
+
+    # 4. Gated to a graduating-student cohort, not open to candidates who already
+    # graduated. Title phrasing is trusted directly; body text only counts when it's
+    # an unambiguous eligibility-window statement (body text often just says "new
+    # grad" to redirect actual new grads to a *different* posting, not to gate this one).
+    for pattern in settings.NEW_GRAD_ONLY_TITLE_PATTERNS:
+        if pattern in title_lower:
+            reasons.append(f"New-grad-cohort only: '{pattern}' in title")
+            break
+    if not any("New-grad-cohort" in r for r in reasons):
+        for pattern in settings.NEW_GRAD_ONLY_BODY_PATTERNS:
+            if pattern in jd_text_lower:
+                reasons.append(f"New-grad-cohort only: '{pattern}' found")
+                break
 
     return bool(reasons), reasons
 

@@ -39,6 +39,10 @@ class Application(Base):
 
     status: Mapped[ApplicationStatus] = mapped_column(Enum(ApplicationStatus), default=ApplicationStatus.saved)
 
+    # Link to the actual application you submitted (Workday/Greenhouse status page,
+    # confirmation email link, etc.) so it can be reopened later to check status.
+    apply_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

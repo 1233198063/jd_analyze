@@ -68,11 +68,30 @@ async def fetch_jd_from_url(url: str) -> tuple[str, JobSource]:
     Fetch and extract job description text from a URL.
     Returns (text, source_type).
     """
+    domain = urlparse(url).netloc.lower()
+    if "linkedin.com" in domain:
+        raise ValueError(
+            "LinkedIn requires login and blocks scraping — it will only return a sign-in "
+            "page, not the job description. Copy the job text and paste it directly instead."
+        )
+    if "indeed.com" in domain:
+        raise ValueError(
+            "Indeed blocks automated requests. Copy the job text and paste it directly instead."
+        )
+
     source = detect_source(url)
 
     async with httpx.AsyncClient(headers=HEADERS, timeout=TIMEOUT, follow_redirects=True) as client:
-        response = await client.get(url)
-        response.raise_for_status()
+        try:
+            response = await client.get(url)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise ValueError(
+                f"The site returned an error ({e.response.status_code}) and likely blocked this "
+                "request. Copy the job text and paste it directly instead."
+            ) from e
+        except httpx.HTTPError as e:
+            raise ValueError(f"Could not reach that URL: {e}") from e
 
     soup = BeautifulSoup(response.text, "lxml")
 

@@ -51,6 +51,8 @@ class Job(Base):
     source: Mapped[JobSource] = mapped_column(Enum(JobSource), default=JobSource.manual)
     company_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    discovered: Mapped[bool] = mapped_column(Boolean, default=False)
+    posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

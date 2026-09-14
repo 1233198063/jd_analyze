@@ -105,6 +105,7 @@ async def get_kanban(db: AsyncSession = Depends(get_db)):
             "applied_at": app.applied_at.isoformat() if app.applied_at else None,
             "rejection_reason": app.rejection_reason.value if app.rejection_reason else None,
             "notes": app.notes,
+            "apply_url": app.apply_url,
         }
         if app.status in by_status:
             by_status[app.status].append(item)

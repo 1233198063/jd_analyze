@@ -5,7 +5,7 @@ import { jobsApi } from "@/api/jobs";
 import { applicationsApi } from "@/api/applications";
 import { PageLoader } from "@/components/common/Loading";
 import ScoreRing, { ScoreBar } from "@/components/features/ScoreRing";
-import Badge, { SponsorBadge, LevelBadge, RecommendationBadge } from "@/components/common/Badge";
+import Badge, { SponsorBadge, LevelBadge, RecommendationBadge, RegionBadge } from "@/components/common/Badge";
 import clsx from "clsx";
 
 function Section({ title, children }) {
@@ -50,13 +50,28 @@ export default function JobDetail() {
 
   const trackApp = useMutation({
     mutationFn: (status) =>
-      applicationsApi.create({ job_id: jobId, status }),
+      data?.job?.application_id
+        ? applicationsApi.update(data.job.application_id, { status })
+        : applicationsApi.create({ job_id: jobId, status }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["job", jobId] }),
   });
 
   const rescore = useMutation({
     mutationFn: () => jobsApi.rescore(jobId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["job", jobId] }),
+  });
+
+  const [applyUrlDraft, setApplyUrlDraft] = useState(null);
+
+  const saveApplyUrl = useMutation({
+    mutationFn: (apply_url) =>
+      data?.job?.application_id
+        ? applicationsApi.update(data.job.application_id, { apply_url })
+        : applicationsApi.create({ job_id: jobId, status: "saved", apply_url }),
+    onSuccess: () => {
+      setApplyUrlDraft(null);
+      qc.invalidateQueries({ queryKey: ["job", jobId] });
+    },
   });
 
   if (isLoading) return <PageLoader />;
@@ -79,7 +94,19 @@ export default function JobDetail() {
           <h1 className="text-xl font-bold text-gray-900">
             {analysis?.title || job.title || "Untitled Role"}
           </h1>
-          <p className="text-gray-600 mt-0.5">{analysis?.company_name || job.company_name || "—"}</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className="text-gray-600">{analysis?.company_name || job.company_name || "—"}</p>
+            {job.url && (
+              <a
+                href={job.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
+              >
+                View Original Posting ↗
+              </a>
+            )}
+          </div>
 
           <div className="flex flex-wrap gap-2 mt-2">
             {ms && (
@@ -88,6 +115,7 @@ export default function JobDetail() {
             {analysis?.level && <LevelBadge level={analysis.level} />}
             {analysis?.sponsorship_status && <SponsorBadge status={analysis.sponsorship_status} />}
             {analysis?.is_remote && <Badge variant="blue">Remote</Badge>}
+            {!analysis?.is_remote && <RegionBadge location={analysis?.location} isRemote={false} />}
             {analysis?.is_hybrid && <Badge variant="blue">Hybrid</Badge>}
             {analysis?.is_contract && <Badge variant="orange">Contract</Badge>}
           </div>
@@ -272,24 +300,28 @@ export default function JobDetail() {
       </div>
 
       {/* Red flags */}
-      {analysis?.red_flags?.length > 0 && (
+      {analysis && (
         <Section title="Red Flags">
-          <div className="space-y-2">
-            {analysis.red_flags.map((flag, i) => (
-              <div key={i} className="flex items-start gap-2 text-sm">
-                <span
-                  className={clsx(
-                    "flex-shrink-0 w-2 h-2 rounded-full mt-1.5",
-                    flag.severity === "high" ? "bg-red-500" : flag.severity === "medium" ? "bg-yellow-500" : "bg-gray-400"
-                  )}
-                />
-                <div>
-                  <span className="text-gray-700">{flag.flag}</span>
-                  <span className="ml-2 text-xs text-gray-400">({flag.category})</span>
+          {analysis.red_flags?.length > 0 ? (
+            <div className="space-y-2">
+              {analysis.red_flags.map((flag, i) => (
+                <div key={i} className="flex items-start gap-2 text-sm">
+                  <span
+                    className={clsx(
+                      "flex-shrink-0 w-2 h-2 rounded-full mt-1.5",
+                      flag.severity === "high" ? "bg-red-500" : flag.severity === "medium" ? "bg-yellow-500" : "bg-gray-400"
+                    )}
+                  />
+                  <div>
+                    <span className="text-gray-700">{flag.flag}</span>
+                    <span className="ml-2 text-xs text-gray-400">({flag.category})</span>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">No red flags detected in this JD.</p>
+          )}
         </Section>
       )}
 
@@ -307,16 +339,16 @@ export default function JobDetail() {
             <button
               className="btn-primary"
               onClick={() => trackApp.mutate("applied")}
-              disabled={trackApp.isPending}
+              disabled={trackApp.isPending || job.application_status === "applied"}
             >
-              Mark Applied
+              {job.application_status === "applied" ? "Applied" : "Mark Applied"}
             </button>
             <button
               className="btn-secondary"
               onClick={() => trackApp.mutate("saved")}
-              disabled={trackApp.isPending}
+              disabled={trackApp.isPending || job.application_status === "saved"}
             >
-              Save
+              {job.application_status === "saved" ? "Saved" : "Save"}
             </button>
             <button
               className="btn-secondary"
@@ -333,6 +365,39 @@ export default function JobDetail() {
         >
           {rescore.isPending ? "Rescoring..." : "Re-score"}
         </button>
+      </div>
+
+      {/* Application link */}
+      <div className="card p-4">
+        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          投递链接 Application Link
+        </label>
+        <div className="flex gap-2 mt-2">
+          <input
+            type="url"
+            className="input flex-1"
+            placeholder="https://... (投递后台/确认邮件链接)"
+            value={applyUrlDraft ?? job.apply_url ?? ""}
+            onChange={(e) => setApplyUrlDraft(e.target.value)}
+          />
+          <button
+            className="btn-secondary"
+            disabled={saveApplyUrl.isPending || applyUrlDraft === null || applyUrlDraft === (job.apply_url ?? "")}
+            onClick={() => saveApplyUrl.mutate(applyUrlDraft)}
+          >
+            {saveApplyUrl.isPending ? "Saving..." : "Save"}
+          </button>
+          {job.apply_url && (
+            <a
+              href={job.apply_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-secondary whitespace-nowrap"
+            >
+              打开 ↗
+            </a>
+          )}
+        </div>
       </div>
 
       {/* Referral message modal */}
