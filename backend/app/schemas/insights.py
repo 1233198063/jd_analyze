@@ -2,6 +2,24 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
+from app.models.skill_study import StudyStatus
+
+
+class SkillStudyUpsert(BaseModel):
+    status: StudyStatus
+    note: Optional[str] = None
+
+
+class SkillStudyOut(BaseModel):
+    skill: str
+    status: StudyStatus
+    note: Optional[str]
+    started_at: Optional[datetime]
+    finished_at: Optional[datetime]
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
 
 class GapMeta(BaseModel):
     resume_name: Optional[str]
@@ -35,6 +53,7 @@ class SkillGap(BaseModel):
     top_roles: list[RoleCount]
     how_to_learn: Optional[str]
     example_jobs: list[ExampleJob]
+    study: Optional[SkillStudyOut] = None
 
 
 class RoleGapSummary(BaseModel):
@@ -49,8 +68,15 @@ class SkillStrength(BaseModel):
     frequency_pct: float
 
 
+class ReadingProgress(BaseModel):
+    want_to_read: int
+    reading: int
+    finished: int
+
+
 class ResumeGapReport(BaseModel):
     meta: GapMeta
     gaps: list[SkillGap]
     by_role: list[RoleGapSummary]
     strengths: list[SkillStrength]
+    reading_progress: ReadingProgress

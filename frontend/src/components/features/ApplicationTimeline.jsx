@@ -2,22 +2,11 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { applicationsApi } from "@/api/applications";
 import { AppStatusBadge } from "@/components/common/Badge";
+import Stamp, { stampLabel, stampTextClass } from "@/components/features/Stamp";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 
 dayjs.extend(relativeTime);
-
-const STAGE_DOT = {
-  saved: "bg-gray-400",
-  applied: "bg-blue-500",
-  referral_asked: "bg-purple-500",
-  oa: "bg-yellow-500",
-  phone_screen: "bg-yellow-500",
-  interview: "bg-orange-500",
-  offer: "bg-green-500",
-  rejected: "bg-red-500",
-  withdrawn: "bg-gray-300",
-};
 
 function daysBetween(from, to) {
   return dayjs(to).startOf("day").diff(dayjs(from).startOf("day"), "day");
@@ -42,14 +31,17 @@ function EventRow({ event, index, applicationId, previousEvent, isLast }) {
 
   return (
     <div className="flex gap-3">
-      <div className="flex flex-col items-center flex-shrink-0 pt-1">
-        <span className={`w-2.5 h-2.5 rounded-full ${STAGE_DOT[event.status] || "bg-gray-400"}`} />
-        {!isLast && <span className="w-px flex-1 bg-gray-200 my-1" />}
+      <div className="flex flex-col items-center flex-shrink-0">
+        <Stamp status={event.status} seed={event.timestamp} />
+        {!isLast && <span className="flex-1 border-l border-dashed border-gray-300 my-1" />}
       </div>
 
       <div className={`flex-1 min-w-0 ${isLast ? "" : "pb-4"}`}>
         <div className="flex items-center gap-2 flex-wrap">
           <AppStatusBadge status={event.status} />
+          <span className={`font-hand text-base ${stampTextClass(event.status)}`}>
+            {stampLabel(event.status)}
+          </span>
           {gap != null && gap > 0 && (
             <span className="text-xs text-gray-400">+{gap}d</span>
           )}
@@ -82,12 +74,14 @@ function EventRow({ event, index, applicationId, previousEvent, isLast }) {
           </div>
         ) : (
           <button
-            className="text-xs text-gray-600 hover:text-blue-600 hover:underline mt-0.5 block"
+            className="mt-0.5 block text-left hover:opacity-70 transition-opacity"
             onClick={() => setEditing(true)}
             title="Click to correct this date"
           >
-            {dayjs(event.timestamp).format("MMM D, YYYY")}
-            <span className="text-gray-400"> · {dayjs(event.timestamp).fromNow()}</span>
+            <span className="font-hand text-lg text-gray-700 leading-none">
+              {dayjs(event.timestamp).format("MMM D, YYYY")}
+            </span>
+            <span className="text-xs text-gray-400"> · {dayjs(event.timestamp).fromNow()}</span>
           </button>
         )}
 
@@ -114,7 +108,10 @@ export default function ApplicationTimeline({ applicationId }) {
   return (
     <div className="card p-5">
       <div className="flex items-baseline justify-between mb-3">
-        <h3 className="text-sm font-semibold text-gray-700">Application Timeline</h3>
+        <h3 className="text-sm font-semibold text-gray-700">
+          Application Timeline
+          <span className="font-hand text-lg text-gray-400 ml-2">投递手账</span>
+        </h3>
         {appliedAt && (
           <p className="text-xs text-gray-400">
             Applied {dayjs(appliedAt).format("MMM D, YYYY")}

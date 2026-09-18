@@ -3,6 +3,10 @@ export default {
   content: ["./index.html", "./src/**/*.{js,jsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        // Handwritten accent for journal-style dates and stamp captions.
+        hand: ['Caveat', 'Segoe Script', 'Bradley Hand', 'cursive'],
+      },
       colors: {
         brand: {
           50: "#eff6ff",

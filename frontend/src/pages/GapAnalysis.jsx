@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { insightsApi } from "@/api/insights";
 import { PageLoader } from "@/components/common/Loading";
 import Badge from "@/components/common/Badge";
@@ -9,6 +9,58 @@ import clsx from "clsx";
 function PriorityBadge({ priority }) {
   const variant = priority === "high" ? "red" : priority === "medium" ? "yellow" : "gray";
   return <Badge variant={variant}>{priority}</Badge>;
+}
+
+// Book spine colour carries the priority, so the shelf reads at a glance.
+const SPINE = {
+  high: "bg-rose-400",
+  medium: "bg-amber-400",
+  low: "bg-slate-300",
+};
+
+const SHELF_STATUS = [
+  { key: "want_to_read", label: "想读", active: "bg-slate-200 text-slate-700" },
+  { key: "reading", label: "在读", active: "bg-amber-200 text-amber-800" },
+  { key: "finished", label: "已读", active: "bg-green-200 text-green-800" },
+];
+
+function ShelfControls({ skill, current }) {
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["resume-gaps"] });
+
+  const setStatus = useMutation({
+    mutationFn: (status) => insightsApi.setSkillStudy(skill, { status }),
+    onSuccess: invalidate,
+  });
+  const clear = useMutation({
+    mutationFn: () => insightsApi.clearSkillStudy(skill),
+    onSuccess: invalidate,
+  });
+
+  return (
+    <div className="flex items-center gap-1 flex-shrink-0">
+      {SHELF_STATUS.map((s) => {
+        const on = current === s.key;
+        return (
+          <button
+            key={s.key}
+            disabled={setStatus.isPending || clear.isPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              on ? clear.mutate() : setStatus.mutate(s.key);
+            }}
+            className={clsx(
+              "font-hand text-base px-2 py-0.5 rounded-md transition-colors leading-none",
+              on ? s.active : "text-gray-400 hover:bg-gray-100"
+            )}
+            title={on ? "再点一次取消" : `标记为${s.label}`}
+          >
+            {s.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function Section({ title, subtitle, children }) {
@@ -23,30 +75,65 @@ function Section({ title, subtitle, children }) {
 
 function GapRow({ gap }) {
   const [open, setOpen] = useState(false);
-  return (
-    <div className="border border-gray-200 rounded-lg">
-      <button
-        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className="text-gray-300 text-xs w-3">{open ? "▾" : "▸"}</span>
-        <span className="font-medium text-sm text-gray-900 flex-1 truncate">{gap.skill}</span>
-        <PriorityBadge priority={gap.priority} />
-        <span className="text-xs text-gray-500 w-32 text-right flex-shrink-0">
-          {gap.jd_count} JDs · {gap.frequency_pct}%
-        </span>
-      </button>
+  const status = gap.study?.status;
+  const finished = status === "finished";
 
-      {/* frequency bar */}
-      <div className="h-1 bg-gray-100 mx-3 rounded-full overflow-hidden">
-        <div
-          className={clsx(
-            "h-full rounded-full",
-            gap.priority === "high" ? "bg-red-400" : gap.priority === "medium" ? "bg-yellow-400" : "bg-gray-300"
-          )}
-          style={{ width: `${Math.min(gap.frequency_pct * 3, 100)}%` }}
-        />
-      </div>
+  return (
+    <div
+      className={clsx(
+        "flex rounded-lg border overflow-hidden transition-colors",
+        finished ? "border-green-200 bg-green-50/30" : "border-gray-200"
+      )}
+    >
+      {/* book spine */}
+      <div className={clsx("w-1.5 flex-shrink-0", finished ? "bg-green-400" : SPINE[gap.priority])} />
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-3 px-3 py-2.5">
+          <button
+            className="flex items-center gap-3 flex-1 min-w-0 text-left"
+            onClick={() => setOpen((v) => !v)}
+          >
+            <span className="text-gray-300 text-xs w-3">{open ? "▾" : "▸"}</span>
+            <span
+              className={clsx(
+                "font-medium text-sm flex-1 truncate",
+                finished ? "text-green-800" : "text-gray-900"
+              )}
+            >
+              {gap.skill}
+            </span>
+            {!finished && <PriorityBadge priority={gap.priority} />}
+            {finished && <Badge variant="green">已读 ✓</Badge>}
+            <span className="text-xs text-gray-500 whitespace-nowrap">
+              {gap.jd_count} JDs · {gap.frequency_pct}%
+            </span>
+          </button>
+          <ShelfControls skill={gap.skill} current={status} />
+        </div>
+
+        {/* frequency bar */}
+        <div className="h-1 bg-gray-100 mx-3 rounded-full overflow-hidden">
+          <div
+            className={clsx(
+              "h-full rounded-full",
+              finished
+                ? "bg-green-400"
+                : gap.priority === "high"
+                ? "bg-red-400"
+                : gap.priority === "medium"
+                ? "bg-yellow-400"
+                : "bg-gray-300"
+            )}
+            style={{ width: `${Math.min(gap.frequency_pct * 3, 100)}%` }}
+          />
+        </div>
+
+        {finished && (
+          <p className="text-xs text-green-700 px-3 pt-2">
+            学完了 —— 记得把它写进简历，下次重算分数时这本书就会从书单上消失。
+          </p>
+        )}
 
       {open && (
         <div className="px-3 pb-3 pt-2 space-y-2 text-xs">
@@ -95,6 +182,7 @@ function GapRow({ gap }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -110,16 +198,19 @@ export default function GapAnalysis() {
   if (isLoading) return <PageLoader />;
   if (error) return <div className="card p-6 text-red-600">{error.message}</div>;
 
-  const { meta, gaps, by_role: byRole, strengths } = data;
+  const { meta, gaps, by_role: byRole, strengths, reading_progress: reading } = data;
   const highCount = gaps.filter((g) => g.priority === "high").length;
 
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Resume Gaps</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Resume Gaps
+            <span className="font-hand text-2xl text-gray-400 ml-2">技能书单</span>
+          </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            What your JD history keeps asking for that your resume doesn't show — and what to learn first.
+            What your JD history keeps asking for that your resume doesn't show — 一本本读完它。
           </p>
         </div>
         <div className="flex gap-1 p-1 bg-gray-100 rounded-lg flex-shrink-0">
@@ -162,8 +253,8 @@ export default function GapAnalysis() {
                 value: gaps.filter((g) => g.jd_count >= 2).length,
                 sub: `wanted by 2+ JDs · ${gaps.length} incl. one-offs`,
               },
+              { label: "已读 · 在读", value: `${reading.finished} · ${reading.reading}`, sub: `想读 ${reading.want_to_read}` },
               { label: "High priority", value: highCount, sub: "learn these first" },
-              { label: "Matched strengths", value: strengths.length, sub: "keep leading with these" },
             ].map((s) => (
               <div key={s.label} className="card p-4">
                 <p className="text-xs text-gray-500">{s.label}</p>
@@ -174,8 +265,8 @@ export default function GapAnalysis() {
           </div>
 
           <Section
-            title="Learning priority"
-            subtitle={`Ranked by how often it's demanded, weighted toward hard requirements and higher-scoring jobs. Based on ${meta.jobs_considered} JDs scored against "${meta.resume_name}".`}
+            title="想读书单 · Reading List"
+            subtitle={`按被要求的频率排序，硬性要求和高分岗位权重更高。基于 ${meta.jobs_considered} 份 JD 与「${meta.resume_name}」的比对。点右侧「想读 / 在读 / 已读」标记进度。`}
           >
             <div className="space-y-1.5">
               {gaps.slice(0, 25).map((g) => (

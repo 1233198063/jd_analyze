@@ -2,23 +2,28 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { applicationsApi } from "@/api/applications";
 import { PageLoader } from "@/components/common/Loading";
+import Stamp, { stampLabel } from "@/components/features/Stamp";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import clsx from "clsx";
 
 dayjs.extend(relativeTime);
 
-const STAGE_ACCENT = {
-  saved: "bg-gray-400",
-  applied: "bg-blue-500",
-  referral_asked: "bg-purple-500",
-  oa: "bg-yellow-500",
-  phone_screen: "bg-yellow-500",
-  interview: "bg-orange-500",
-  offer: "bg-green-500",
-  rejected: "bg-red-500",
-  withdrawn: "bg-gray-300",
+// Low-saturation blocks carry stage identity on the list, so the rows themselves
+// can stay plain text. Stamps live on the JobDetail timeline, not on this surface.
+const STAGE_TINT = {
+  saved: { bar: "bg-slate-300", tint: "bg-slate-50", dot: "bg-slate-400" },
+  applied: { bar: "bg-blue-300", tint: "bg-blue-50/50", dot: "bg-blue-400" },
+  referral_asked: { bar: "bg-purple-300", tint: "bg-purple-50/50", dot: "bg-purple-400" },
+  oa: { bar: "bg-amber-300", tint: "bg-amber-50/50", dot: "bg-amber-400" },
+  phone_screen: { bar: "bg-amber-300", tint: "bg-amber-50/50", dot: "bg-amber-400" },
+  interview: { bar: "bg-orange-300", tint: "bg-orange-50/50", dot: "bg-orange-400" },
+  offer: { bar: "bg-emerald-300", tint: "bg-emerald-50/50", dot: "bg-emerald-400" },
+  rejected: { bar: "bg-rose-200", tint: "bg-rose-50/40", dot: "bg-rose-300" },
+  withdrawn: { bar: "bg-gray-200", tint: "bg-gray-50", dot: "bg-gray-300" },
 };
+
+const tint = (status) => STAGE_TINT[status] || STAGE_TINT.saved;
 
 const NEXT_STATUS = {
   saved: "applied",
@@ -56,7 +61,7 @@ function daysSince(date) {
   return dayjs().startOf("day").diff(dayjs(date).startOf("day"), "day");
 }
 
-/** Compact "saved Sep 12 → applied Sep 12 → phone Sep 17" trail. */
+/** Plain trail: "Saved Sep 12 → Applied Sep 12 → Phone Sep 17". */
 function TimelineTrail({ timeline = [] }) {
   if (timeline.length === 0) return null;
   return (
@@ -70,6 +75,39 @@ function TimelineTrail({ timeline = [] }) {
           </span>
         </span>
       ))}
+    </div>
+  );
+}
+
+/** This month's collected stamps, kept to one quiet line above the list. */
+function StampCollection({ kanban }) {
+  const startOfMonth = dayjs().startOf("month");
+  const stamps = kanban
+    .flatMap((col) => col.items)
+    .flatMap((item) =>
+      (item.timeline || []).map((e) => ({ ...e, company: item.company, title: item.title }))
+    )
+    .filter((e) => e.timestamp && dayjs(e.timestamp).isAfter(startOfMonth))
+    .sort((a, b) => dayjs(a.timestamp) - dayjs(b.timestamp));
+
+  if (stamps.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-3 flex-wrap px-1">
+      <span className="text-xs text-gray-400 whitespace-nowrap">
+        本月印章 · {stamps.length} 枚
+      </span>
+      <div className="flex flex-wrap gap-1 opacity-75">
+        {stamps.map((e, i) => (
+          <Stamp
+            key={`${e.timestamp}-${i}`}
+            status={e.status}
+            size="sm"
+            seed={`${e.timestamp}-${i}`}
+            title={`${stampLabel(e.status)} · ${e.title || ""} ${e.company || ""} · ${dayjs(e.timestamp).format("MMM D")}`}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -90,10 +128,6 @@ function AppRow({ item, colStatus }) {
 
   return (
     <div className="flex items-start gap-3 px-4 py-3 border-t border-gray-100 first:border-t-0 hover:bg-gray-50/60 transition-colors">
-      <span
-        className={clsx("w-2 h-2 rounded-full flex-shrink-0 mt-1.5", STAGE_ACCENT[colStatus] || "bg-gray-300")}
-      />
-
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 flex-wrap">
           <Link
@@ -207,7 +241,7 @@ export default function Tracker() {
               <span
                 className={clsx(
                   "w-2 h-2 rounded-full",
-                  col.items.length ? STAGE_ACCENT[col.status] : "bg-gray-200"
+                  col.items.length ? tint(col.status).dot : "bg-gray-200"
                 )}
               />
               <span className={clsx("text-xs", col.items.length ? "text-gray-700" : "text-gray-400")}>
@@ -241,20 +275,24 @@ export default function Tracker() {
         </div>
       )}
 
+      <StampCollection kanban={kanban} />
+
       {/* Stages stacked vertically */}
       {activeStages.map((col) => (
         <div key={col.status}>
           <div className="flex items-center gap-2 mb-2">
-            <span className={clsx("w-2.5 h-2.5 rounded-full", STAGE_ACCENT[col.status])} />
+            <span className={clsx("w-1 h-4 rounded-full", tint(col.status).bar)} />
             <h2 className="text-sm font-semibold text-gray-700">{col.label}</h2>
-            <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
-              {col.items.length}
-            </span>
+            <span className="text-xs text-gray-400">{col.items.length}</span>
           </div>
-          <div className="card overflow-hidden">
-            {col.items.map((item) => (
-              <AppRow key={item.id} item={item} colStatus={col.status} />
-            ))}
+          <div className="card overflow-hidden flex">
+            {/* the colour block that tells sections apart without shouting */}
+            <div className={clsx("w-1 flex-shrink-0", tint(col.status).bar)} />
+            <div className={clsx("flex-1 min-w-0", tint(col.status).tint)}>
+              {col.items.map((item) => (
+                <AppRow key={item.id} item={item} colStatus={col.status} />
+              ))}
+            </div>
           </div>
         </div>
       ))}
