@@ -110,6 +110,50 @@ class ResumeMatchScoreOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class KeywordCoverage(BaseModel):
+    keyword: str
+    in_original_resume: bool
+    in_tailored_resume: bool
+    covered_via: Optional[str] = None
+
+
+class IntegrationSuggestion(BaseModel):
+    skill: str
+    target_bullet: str
+    suggested_addition: str
+    how_to_explain: str
+    honesty_note: str
+
+
+class TradeOffNote(BaseModel):
+    topic: str
+    why_this_choice: str
+    alternatives_considered: list[str]
+    why_not_alternatives: str
+    how_to_explain: str
+
+
+class LearningGap(BaseModel):
+    skill: str
+    why_it_matters: str
+    how_to_learn: str
+    priority: str  # high | medium | low
+
+
+class ResumeTailoringOut(BaseModel):
+    id: UUID
+    job_id: UUID
+    resume_id: Optional[UUID]
+    tailored_text: str
+    keyword_coverage: list[dict]
+    integration_suggestions: list[dict]
+    trade_off_notes: list[dict]
+    learning_gaps: list[dict]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class JobDetailOut(BaseModel):
     job: JobOut
     analysis: Optional[JobAnalysisOut]

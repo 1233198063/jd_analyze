@@ -61,6 +61,9 @@ class Job(Base):
     analysis: Mapped["JobAnalysis | None"] = relationship("JobAnalysis", back_populates="job", uselist=False)
     match_score: Mapped["ResumeMatchScore | None"] = relationship("ResumeMatchScore", back_populates="job", uselist=False)
     application: Mapped["Application | None"] = relationship("Application", back_populates="job", uselist=False)
+    tailorings: Mapped[list["ResumeTailoring"]] = relationship(
+        "ResumeTailoring", back_populates="job", order_by="ResumeTailoring.created_at.desc()"
+    )
 
 
 class JobAnalysis(Base):
@@ -145,4 +148,34 @@ class ResumeMatchScore(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     job: Mapped["Job"] = relationship("Job", back_populates="match_score")
+    resume: Mapped["Resume | None"] = relationship("Resume")
+
+
+class ResumeTailoring(Base):
+    """A generated, JD-tailored rewrite of the candidate's resume, plus coaching notes.
+
+    Never fabricates experience: the AI prompt restricts tailored_text to reordering/
+    rephrasing what's already true on the resume. Skills the candidate doesn't have are
+    routed to learning_gaps instead of being written into the resume.
+    """
+    __tablename__ = "resume_tailorings"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="CASCADE"))
+    resume_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("resumes.id", ondelete="SET NULL"), nullable=True)
+
+    tailored_text: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # [{keyword, in_original_resume, in_tailored_resume, covered_via}]
+    keyword_coverage: Mapped[list] = mapped_column(JSONB, default=list)
+    # [{skill, target_bullet, suggested_addition, how_to_explain, honesty_note}]
+    integration_suggestions: Mapped[list] = mapped_column(JSONB, default=list)
+    # [{topic, why_this_choice, alternatives_considered, why_not_alternatives, how_to_explain}]
+    trade_off_notes: Mapped[list] = mapped_column(JSONB, default=list)
+    # [{skill, why_it_matters, how_to_learn, priority}]
+    learning_gaps: Mapped[list] = mapped_column(JSONB, default=list)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    job: Mapped["Job"] = relationship("Job", back_populates="tailorings")
     resume: Mapped["Resume | None"] = relationship("Resume")

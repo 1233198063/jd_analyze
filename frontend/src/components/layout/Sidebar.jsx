@@ -7,6 +7,7 @@ const nav = [
   { to: "/jobs/add", label: "Add JD", icon: "+" },
   { to: "/tracker", label: "Tracker", icon: "⬚" },
   { to: "/resume", label: "Resume", icon: "≡" },
+  { to: "/gaps", label: "Resume Gaps", icon: "△" },
 ];
 
 export default function Sidebar() {

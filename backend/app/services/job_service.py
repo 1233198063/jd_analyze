@@ -9,12 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.models.job import Job, JobAnalysis, ResumeMatchScore, JobSource, SponsorshipStatus, JobLevel, Recommendation
+from app.models.job import Job, JobAnalysis, ResumeMatchScore, ResumeTailoring, JobSource, SponsorshipStatus, JobLevel, Recommendation
 from app.models.company import Company
 from app.models.resume import Resume
 from app.schemas.job import JobCreate
 from app.services import ai_parser, scorer
 from app.services.jd_scraper import fetch_jd_from_url
+from app.services.skills import extract_skills_from_text
 
 
 async def _get_master_resume(db: AsyncSession) -> Resume | None:
@@ -22,13 +23,43 @@ async def _get_master_resume(db: AsyncSession) -> Resume | None:
     return result.scalar_one_or_none()
 
 
+def resume_skills_for_scoring(resume: Resume | None) -> list[str]:
+    """Canonical skills for a resume, always re-derived from its text.
+
+    The stored `resumes.skills` column is a snapshot taken when the resume was
+    saved, so it silently goes stale whenever the alias table in services.skills
+    grows — and a stale list under-counts resume/JD overlap in every score.
+    """
+    return extract_skills_from_text(resume.raw_text) if resume else []
+
+
+def _normalize_company_name(name: str) -> str:
+    normalized = re.sub(r"[^\w\s]", "", name.lower()).strip()
+    return re.sub(r"\s+", " ", normalized)
+
+
 async def _get_company(db: AsyncSession, name: str | None) -> Company | None:
     if not name:
         return None
-    normalized = re.sub(r"[^\w\s]", "", name.lower()).strip()
-    normalized = re.sub(r"\s+", " ", normalized)
-    result = await db.execute(select(Company).where(Company.name_normalized == normalized))
+    result = await db.execute(
+        select(Company).where(Company.name_normalized == _normalize_company_name(name))
+    )
     return result.scalar_one_or_none()
+
+
+def _apply_breakdown(score: ResumeMatchScore, breakdown) -> None:
+    """Copy a freshly computed rule-based breakdown onto a match score row."""
+    score.overall_score = breakdown.total
+    score.score_h1b = breakdown.h1b
+    score.score_level = breakdown.level
+    score.score_skills = breakdown.skills
+    score.score_location = breakdown.location
+    score.score_company = breakdown.company
+    score.score_product = breakdown.product
+    score.is_auto_rejected = breakdown.is_auto_rejected
+    score.auto_reject_reasons = breakdown.auto_reject_reasons
+    score.recommendation = breakdown.recommendation
+    score.recommendation_reason = breakdown.recommendation_reason
 
 
 def _map_level(raw: str) -> JobLevel:
@@ -91,7 +122,7 @@ async def create_job_and_analyze(
 
     # Step 4: master resume skills for scoring
     resume = await _get_master_resume(db)
-    resume_skills = resume.skills if resume else []
+    resume_skills = resume_skills_for_scoring(resume)
 
     # Step 5: compute score
     breakdown = scorer.compute_score(
@@ -220,3 +251,124 @@ async def list_jobs(
         query = query.where(Job.posted_at >= posted_after)
     result = await db.execute(query)
     return list(result.scalars().all())
+
+
+async def rescore_all_jobs(db: AsyncSession) -> dict:
+    """Recompute the rule-based score for every analyzed job.
+
+    Only the deterministic breakdown is redone — the AI gap analysis already stored
+    on each match score is left alone, so this needs no API calls. Use it after
+    editing the master resume or changing scoring rules.
+    """
+    resume = await _get_master_resume(db)
+    resume_skills = resume_skills_for_scoring(resume)
+
+    companies = (await db.execute(select(Company))).scalars().all()
+    by_name = {c.name_normalized: c for c in companies}
+
+    jobs = (
+        await db.execute(
+            select(Job).options(selectinload(Job.analysis), selectinload(Job.match_score))
+        )
+    ).scalars().all()
+
+    rescored = 0
+    changed = 0
+    skipped = 0
+    recommendation_changes: list[dict] = []
+
+    for job in jobs:
+        analysis = job.analysis
+        if not analysis:
+            skipped += 1
+            continue
+
+        company = by_name.get(_normalize_company_name(analysis.company_name or "")) if analysis.company_name else None
+        breakdown = scorer.compute_score(
+            analysis=analysis.raw_ai_response,
+            jd_text_lower=job.raw_text.lower(),
+            resume_matched_skills=resume_skills,
+            company_h1b_total=company.h1b_total_filings if company else 0,
+            company_h1b_rate=company.h1b_approval_rate if company else None,
+            company_swe_filings=company.h1b_swe_filings if company else 0,
+            company_size=company.size if company else None,
+        )
+
+        score = job.match_score
+        if not score:
+            score = ResumeMatchScore(job_id=job.id, resume_id=resume.id if resume else None)
+            db.add(score)
+
+        previous_total = score.overall_score
+        previous_recommendation = score.recommendation
+        _apply_breakdown(score, breakdown)
+        if resume:
+            score.resume_id = resume.id
+        db.add(score)
+
+        rescored += 1
+        if abs(previous_total - breakdown.total) > 0.05:
+            changed += 1
+        if previous_recommendation != breakdown.recommendation:
+            recommendation_changes.append({
+                "job_id": str(job.id),
+                "title": analysis.title or job.title,
+                "company_name": analysis.company_name or job.company_name,
+                "from_recommendation": previous_recommendation.value if previous_recommendation else None,
+                "to_recommendation": breakdown.recommendation.value,
+                "from_score": round(previous_total, 1),
+                "to_score": round(breakdown.total, 1),
+            })
+
+    await db.flush()
+    return {
+        "rescored": rescored,
+        "score_changed": changed,
+        "skipped_no_analysis": skipped,
+        "recommendation_changes": recommendation_changes,
+        "resume_name": resume.name if resume else None,
+        "resume_skill_count": len(resume_skills),
+    }
+
+
+async def generate_resume_tailoring(db: AsyncSession, job_id: UUID) -> ResumeTailoring:
+    """AI-tailor the master resume to this JD: rewritten text + coaching notes.
+
+    Never invents experience — the prompt restricts rewriting to what's already true on
+    the resume, and routes anything the candidate can't honestly claim into learning_gaps.
+    """
+    job = await get_job_detail(db, job_id)
+    if not job:
+        raise ValueError("Job not found")
+    if not job.analysis:
+        raise ValueError("Job not yet analyzed")
+
+    resume = await _get_master_resume(db)
+    if not resume:
+        raise ValueError("No master resume set — add one on the Resume page first")
+
+    ai_data = ai_parser.tailor_resume(resume.raw_text, job.analysis.raw_ai_response)
+
+    tailoring = ResumeTailoring(
+        job_id=job.id,
+        resume_id=resume.id,
+        tailored_text=ai_data.get("tailored_text", ""),
+        keyword_coverage=ai_data.get("keyword_coverage", []),
+        integration_suggestions=ai_data.get("integration_suggestions", []),
+        trade_off_notes=ai_data.get("trade_off_notes", []),
+        learning_gaps=ai_data.get("learning_gaps", []),
+    )
+    db.add(tailoring)
+    await db.flush()
+    await db.refresh(tailoring)
+    return tailoring
+
+
+async def get_latest_tailoring(db: AsyncSession, job_id: UUID) -> ResumeTailoring | None:
+    result = await db.execute(
+        select(ResumeTailoring)
+        .where(ResumeTailoring.job_id == job_id)
+        .order_by(ResumeTailoring.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()

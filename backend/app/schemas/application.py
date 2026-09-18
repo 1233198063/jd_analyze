@@ -11,6 +11,8 @@ class ApplicationCreate(BaseModel):
     status: ApplicationStatus = ApplicationStatus.saved
     notes: Optional[str] = None
     apply_url: Optional[str] = None
+    # When this actually happened, if it wasn't today (e.g. logging a past application).
+    event_date: Optional[datetime] = None
 
 
 class ApplicationUpdate(BaseModel):
@@ -22,12 +24,20 @@ class ApplicationUpdate(BaseModel):
     rejection_notes: Optional[str] = None
     notes: Optional[str] = None
     apply_url: Optional[str] = None
+    # Dates the status change actually happened, when recorded after the fact.
+    event_date: Optional[datetime] = None
+    applied_at: Optional[datetime] = None
 
 
 class TimelineEvent(BaseModel):
     status: ApplicationStatus
     timestamp: datetime
     note: Optional[str]
+
+
+class TimelineEventUpdate(BaseModel):
+    timestamp: Optional[datetime] = None
+    note: Optional[str] = None
 
 
 class ApplicationOut(BaseModel):

@@ -1,0 +1,247 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { insightsApi } from "@/api/insights";
+import { PageLoader } from "@/components/common/Loading";
+import Badge from "@/components/common/Badge";
+import clsx from "clsx";
+
+function PriorityBadge({ priority }) {
+  const variant = priority === "high" ? "red" : priority === "medium" ? "yellow" : "gray";
+  return <Badge variant={variant}>{priority}</Badge>;
+}
+
+function Section({ title, subtitle, children }) {
+  return (
+    <div className="card p-5">
+      <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
+      {subtitle && <p className="text-xs text-gray-400 mt-0.5 mb-3">{subtitle}</p>}
+      {children}
+    </div>
+  );
+}
+
+function GapRow({ gap }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border border-gray-200 rounded-lg">
+      <button
+        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="text-gray-300 text-xs w-3">{open ? "▾" : "▸"}</span>
+        <span className="font-medium text-sm text-gray-900 flex-1 truncate">{gap.skill}</span>
+        <PriorityBadge priority={gap.priority} />
+        <span className="text-xs text-gray-500 w-32 text-right flex-shrink-0">
+          {gap.jd_count} JDs · {gap.frequency_pct}%
+        </span>
+      </button>
+
+      {/* frequency bar */}
+      <div className="h-1 bg-gray-100 mx-3 rounded-full overflow-hidden">
+        <div
+          className={clsx(
+            "h-full rounded-full",
+            gap.priority === "high" ? "bg-red-400" : gap.priority === "medium" ? "bg-yellow-400" : "bg-gray-300"
+          )}
+          style={{ width: `${Math.min(gap.frequency_pct * 3, 100)}%` }}
+        />
+      </div>
+
+      {open && (
+        <div className="px-3 pb-3 pt-2 space-y-2 text-xs">
+          <div className="flex flex-wrap gap-3 text-gray-600">
+            <span>
+              <span className="text-gray-400">Required in </span>
+              <span className="font-medium text-gray-800">{gap.required_count}</span>
+              <span className="text-gray-400"> · nice-to-have in </span>
+              <span className="font-medium text-gray-800">{gap.nice_to_have_count}</span>
+            </span>
+            <span>
+              <span className="text-gray-400">Avg score of these jobs: </span>
+              <span className="font-medium text-gray-800">{gap.avg_job_score}</span>
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 items-center">
+            <span className="text-gray-400">Roles:</span>
+            {gap.top_roles.map((r) => (
+              <span key={r.role} className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                {r.role} ({r.count})
+              </span>
+            ))}
+          </div>
+
+          {gap.how_to_learn && (
+            <p className="text-gray-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5">
+              <span className="font-medium text-blue-800">Start here: </span>
+              {gap.how_to_learn}
+            </p>
+          )}
+
+          <div>
+            <p className="text-gray-400 mb-1">JDs that wanted it:</p>
+            <div className="space-y-0.5">
+              {gap.example_jobs.map((j) => (
+                <Link
+                  key={j.job_id}
+                  to={`/jobs/${j.job_id}`}
+                  className="block text-blue-600 hover:underline truncate"
+                >
+                  {j.title || "Untitled"} — {j.company_name || "?"} ({j.overall_score.toFixed(0)})
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function GapAnalysis() {
+  const [scope, setScope] = useState("all");
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["resume-gaps", scope],
+    queryFn: () => insightsApi.resumeGaps(scope),
+  });
+
+  if (isLoading) return <PageLoader />;
+  if (error) return <div className="card p-6 text-red-600">{error.message}</div>;
+
+  const { meta, gaps, by_role: byRole, strengths } = data;
+  const highCount = gaps.filter((g) => g.priority === "high").length;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Resume Gaps</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            What your JD history keeps asking for that your resume doesn't show — and what to learn first.
+          </p>
+        </div>
+        <div className="flex gap-1 p-1 bg-gray-100 rounded-lg flex-shrink-0">
+          {[
+            { key: "all", label: "All JDs" },
+            { key: "applied", label: "Applied only" },
+          ].map((s) => (
+            <button
+              key={s.key}
+              onClick={() => setScope(s.key)}
+              className={clsx(
+                "px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
+                scope === s.key ? "bg-white shadow text-gray-900" : "text-gray-600 hover:text-gray-800"
+              )}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {meta.jobs_considered === 0 ? (
+        <div className="card p-12 text-center">
+          <p className="font-medium text-gray-700">
+            {meta.resume_name ? "No JDs to analyze in this scope" : "No master resume set"}
+          </p>
+          <p className="text-sm text-gray-500 mt-1">
+            {meta.resume_name
+              ? "Analyze some JDs first, or switch back to All JDs."
+              : "Add a master resume on the Resume page to enable gap analysis."}
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { label: "JDs analyzed", value: meta.jobs_considered, sub: `of ${meta.jobs_total} total` },
+              {
+                label: "Recurring gaps",
+                value: gaps.filter((g) => g.jd_count >= 2).length,
+                sub: `wanted by 2+ JDs · ${gaps.length} incl. one-offs`,
+              },
+              { label: "High priority", value: highCount, sub: "learn these first" },
+              { label: "Matched strengths", value: strengths.length, sub: "keep leading with these" },
+            ].map((s) => (
+              <div key={s.label} className="card p-4">
+                <p className="text-xs text-gray-500">{s.label}</p>
+                <p className="text-2xl font-bold text-gray-900 mt-0.5">{s.value}</p>
+                <p className="text-xs text-gray-400">{s.sub}</p>
+              </div>
+            ))}
+          </div>
+
+          <Section
+            title="Learning priority"
+            subtitle={`Ranked by how often it's demanded, weighted toward hard requirements and higher-scoring jobs. Based on ${meta.jobs_considered} JDs scored against "${meta.resume_name}".`}
+          >
+            <div className="space-y-1.5">
+              {gaps.slice(0, 25).map((g) => (
+                <GapRow key={g.skill} gap={g} />
+              ))}
+            </div>
+            {gaps.length > 25 && (
+              <p className="text-xs text-gray-400 mt-3">
+                +{gaps.length - 25} more low-frequency gaps not shown.
+              </p>
+            )}
+          </Section>
+
+          <Section title="Gaps by role" subtitle="Which kind of role demands what you're missing.">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {byRole.map((r) => (
+                <div key={r.role} className="border border-gray-200 rounded-lg p-3">
+                  <div className="flex items-baseline justify-between mb-2">
+                    <p className="font-medium text-sm text-gray-900">{r.role}</p>
+                    <p className="text-xs text-gray-400">{r.jd_count} JDs</p>
+                  </div>
+                  {r.top_gaps.length > 0 ? (
+                    <div className="space-y-1">
+                      {r.top_gaps.map((g) => (
+                        <div key={g.skill} className="flex items-center gap-2 text-xs">
+                          <span
+                            className={clsx(
+                              "w-1.5 h-1.5 rounded-full flex-shrink-0",
+                              g.priority === "high" ? "bg-red-500" : g.priority === "medium" ? "bg-yellow-500" : "bg-gray-300"
+                            )}
+                          />
+                          <span className="text-gray-700 flex-1 truncate">{g.skill}</span>
+                          <span className="text-gray-400 flex-shrink-0">
+                            {g.jd_count}/{r.jd_count}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-green-600">No gaps in this role family.</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          {strengths.length > 0 && (
+            <Section
+              title="Your strengths in this market"
+              subtitle="Skills you already have that these JDs ask for most — lead with these on every resume."
+            >
+              <div className="flex flex-wrap gap-1.5">
+                {strengths.map((s) => (
+                  <span
+                    key={s.skill}
+                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-green-100 text-green-700 text-xs font-medium"
+                  >
+                    {s.skill}
+                    <span className="text-green-600/70">{s.jd_count}</span>
+                  </span>
+                ))}
+              </div>
+            </Section>
+          )}
+        </>
+      )}
+    </div>
+  );
+}

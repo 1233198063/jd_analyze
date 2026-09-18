@@ -12,6 +12,17 @@ from app.services.skills import extract_skills_from_text as _extract_skills
 router = APIRouter(prefix="/resume", tags=["resume"])
 
 
+def _to_out(resume: Resume) -> ResumeOut:
+    """Serialize with skills re-derived from raw_text.
+
+    The stored column is only a snapshot from save time, so it drifts whenever the
+    skill alias table grows — deriving here keeps the displayed tags honest.
+    """
+    out = ResumeOut.model_validate(resume)
+    out.skills = _extract_skills(resume.raw_text)
+    return out
+
+
 @router.post("/", response_model=ResumeOut)
 async def create_resume(payload: ResumeCreate, db: AsyncSession = Depends(get_db)):
     # If marking as master, unset existing master
@@ -33,19 +44,20 @@ async def create_resume(payload: ResumeCreate, db: AsyncSession = Depends(get_db
     db.add(resume)
     await db.flush()
     await db.refresh(resume)
-    return resume
+    return _to_out(resume)
 
 
 @router.get("/", response_model=list[ResumeOut])
 async def list_resumes(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Resume).order_by(Resume.created_at.desc()))
-    return result.scalars().all()
+    return [_to_out(r) for r in result.scalars().all()]
 
 
 @router.get("/master", response_model=ResumeOut | None)
 async def get_master_resume(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Resume).where(Resume.is_master == True).limit(1))
-    return result.scalar_one_or_none()
+    resume = result.scalar_one_or_none()
+    return _to_out(resume) if resume else None
 
 
 @router.get("/{resume_id}", response_model=ResumeOut)
@@ -54,7 +66,7 @@ async def get_resume(resume_id: UUID, db: AsyncSession = Depends(get_db)):
     resume = result.scalar_one_or_none()
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
-    return resume
+    return _to_out(resume)
 
 
 @router.patch("/{resume_id}", response_model=ResumeOut)
@@ -80,7 +92,7 @@ async def update_resume(resume_id: UUID, payload: ResumeUpdate, db: AsyncSession
     db.add(resume)
     await db.flush()
     await db.refresh(resume)
-    return resume
+    return _to_out(resume)
 
 
 @router.delete("/{resume_id}", status_code=204)

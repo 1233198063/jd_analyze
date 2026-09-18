@@ -6,6 +6,7 @@ import AddJob from "@/pages/AddJob";
 import JobDetail from "@/pages/JobDetail";
 import Tracker from "@/pages/Tracker";
 import ResumePage from "@/pages/ResumePage";
+import GapAnalysis from "@/pages/GapAnalysis";
 import CompanyProfile from "@/pages/CompanyProfile";
 
 export default function App() {
@@ -19,6 +20,7 @@ export default function App() {
           <Route path="/jobs/:jobId" element={<JobDetail />} />
           <Route path="/tracker" element={<Tracker />} />
           <Route path="/resume" element={<ResumePage />} />
+          <Route path="/gaps" element={<GapAnalysis />} />
           <Route path="/companies/:companyId" element={<CompanyProfile />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
