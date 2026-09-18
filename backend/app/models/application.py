@@ -24,6 +24,10 @@ class RejectionReason(str, enum.Enum):
     sponsorship = "sponsorship"
     level = "level"
     resume = "resume"
+    # Boilerplate "we moved forward with other candidates" reply, pre-interview and
+    # with no reason given. Distinct from `resume` (which asserts a cause you were
+    # told or inferred) and from `no_response` (where they never replied at all).
+    form_rejection = "form_rejection"
     no_response = "no_response"
     oa_failed = "oa_failed"
     interview_failed = "interview_failed"

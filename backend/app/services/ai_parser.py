@@ -131,6 +131,74 @@ Return JSON only:
 }}"""
 
 
+TAILOR_RESUME_PROMPT = """You are an expert technical resume writer and interview coach helping an \
+international student (OPT/STEM OPT/H-1B) tailor their resume for one specific job, without ever \
+misrepresenting their real experience.
+
+CRITICAL RULES — DO NOT VIOLATE ANY OF THESE:
+1. Never invent companies, titles, dates, degrees, metrics, or entire projects that are not already \
+in the original resume text.
+2. Never state that the candidate has used a technology/skill in the tailored resume unless the \
+original resume already provides genuine, defensible evidence of it (including close synonyms, e.g. \
+resume says "Postgres" and JD wants "SQL" — that's already true, use it freely).
+3. You may reorder bullets, cut irrelevant ones, rephrase for JD terminology/keyword alignment, and \
+surface skills that are already implied but under-emphasized. This is NOT fabrication.
+4. For a JD skill the candidate doesn't have evidence for, you may propose folding it into an EXISTING \
+project as an "integration_suggestion" ONLY if there is a genuine, plausible link to something they \
+already built (e.g. they already built a caching layer and the JD wants Redis specifically — if the \
+resume doesn't name the tool, suggest naming it ONLY if the candidate could truthfully say they used \
+it; otherwise do not suggest it). If there's no honest link, put the skill in learning_gaps instead — \
+never write it into tailored_text.
+5. Every integration_suggestion must carry a honesty_note telling the candidate exactly what they must \
+be able to genuinely explain if asked about it in an interview, so they self-check before using it.
+6. tailored_text must stay the same real length/scope as the original — do not pad it with generic \
+filler, and do not shorten real content just to fit keywords.
+
+RESUME TEXT:
+{resume_text}
+
+JOB ANALYSIS (parsed from the JD):
+{job_analysis_json}
+
+TASK — return all five of these:
+1. tailored_text: the rewritten resume (plain text, same structure/sections as the original), \
+reordered and reworded to foreground what's relevant to this JD and naturally use the JD's own \
+terminology wherever it's already truthfully supported.
+2. keyword_coverage: for each important keyword drawn from the JD's required_skills, \
+nice_to_have_skills, and tech_stack — whether it appears in the original resume, whether it appears \
+in tailored_text, and covered_via (which bullet/section it now lives in, or null if not covered).
+3. integration_suggestions: JD skills missing from the resume that can be honestly folded into an \
+EXISTING bullet/project — each with the target_bullet (quote or closely paraphrase the existing resume \
+line), suggested_addition (exact text to weave in), how_to_explain (the talking points the candidate \
+should be ready to give in an interview), and honesty_note (what they must actually be able to speak \
+to, or go verify/practice, before adding this).
+4. trade_off_notes: for notable technology choices reflected in tailored_text (existing or newly \
+surfaced) that an interviewer is likely to probe with "why X and not Y" — the trade-off explanation to \
+give, the alternatives_considered (similar/competing technologies), why_not_alternatives, and \
+how_to_explain as a ready-to-say answer.
+5. learning_gaps: skills/technologies/experience that show up meaningfully in this JD that the \
+candidate does not have and could NOT be honestly folded into existing experience (so they do NOT \
+appear anywhere in tailored_text) — why_it_matters for this type of role, how_to_learn (a concrete, \
+fast way to start), and priority (high/medium/low based on how central it is to this JD).
+
+Return valid JSON only, no markdown, no commentary, in exactly this structure:
+{{
+  "tailored_text": "...",
+  "keyword_coverage": [
+    {{"keyword": "...", "in_original_resume": true/false, "in_tailored_resume": true/false, "covered_via": "..." or null}}
+  ],
+  "integration_suggestions": [
+    {{"skill": "...", "target_bullet": "...", "suggested_addition": "...", "how_to_explain": "...", "honesty_note": "..."}}
+  ],
+  "trade_off_notes": [
+    {{"topic": "...", "why_this_choice": "...", "alternatives_considered": ["...", "..."], "why_not_alternatives": "...", "how_to_explain": "..."}}
+  ],
+  "learning_gaps": [
+    {{"skill": "...", "why_it_matters": "...", "how_to_learn": "...", "priority": "high"/"medium"/"low"}}
+  ]
+}}"""
+
+
 def _call(prompt: str, max_tokens: int = 2048) -> str:
     response = client.chat.completions.create(
         model=MODEL,
@@ -154,6 +222,18 @@ def score_resume_vs_job(resume_text: str, job_analysis: dict) -> dict:
             resume_text=resume_text[:8000],
             job_analysis_json=json.dumps(job_analysis, indent=2)[:4000],
         )
+    )
+    return json.loads(raw)
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+def tailor_resume(resume_text: str, job_analysis: dict) -> dict:
+    raw = _call(
+        TAILOR_RESUME_PROMPT.format(
+            resume_text=resume_text[:8000],
+            job_analysis_json=json.dumps(job_analysis, indent=2)[:4000],
+        ),
+        max_tokens=4096,
     )
     return json.loads(raw)
 

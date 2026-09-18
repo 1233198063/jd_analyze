@@ -5,6 +5,8 @@ import { jobsApi } from "@/api/jobs";
 import { applicationsApi } from "@/api/applications";
 import { PageLoader } from "@/components/common/Loading";
 import ScoreRing, { ScoreBar } from "@/components/features/ScoreRing";
+import ResumeTailorPanel from "@/components/features/ResumeTailorPanel";
+import ApplicationTimeline from "@/components/features/ApplicationTimeline";
 import Badge, { SponsorBadge, LevelBadge, RecommendationBadge, RegionBadge } from "@/components/common/Badge";
 import clsx from "clsx";
 
@@ -53,7 +55,11 @@ export default function JobDetail() {
       data?.job?.application_id
         ? applicationsApi.update(data.job.application_id, { status })
         : applicationsApi.create({ job_id: jobId, status }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["job", jobId] }),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ["job", jobId] });
+      qc.invalidateQueries({ queryKey: ["application", result?.id] });
+      qc.invalidateQueries({ queryKey: ["kanban"] });
+    },
   });
 
   const rescore = useMutation({
@@ -299,6 +305,9 @@ export default function JobDetail() {
         )}
       </div>
 
+      {/* Tailor resume */}
+      {!rejected && analysis && <ResumeTailorPanel jobId={jobId} />}
+
       {/* Red flags */}
       {analysis && (
         <Section title="Red Flags">
@@ -366,6 +375,9 @@ export default function JobDetail() {
           {rescore.isPending ? "Rescoring..." : "Re-score"}
         </button>
       </div>
+
+      {/* Application timeline */}
+      {job.application_id && <ApplicationTimeline applicationId={job.application_id} />}
 
       {/* Application link */}
       <div className="card p-4">

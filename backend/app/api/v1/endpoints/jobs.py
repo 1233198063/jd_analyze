@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 from app.core.database import get_db
-from app.schemas.job import JobCreate, JobDetailOut, JobListItem, JobOut, ResumeMatchScoreOut
+from app.schemas.job import JobCreate, JobDetailOut, JobListItem, JobOut, ResumeMatchScoreOut, ResumeTailoringOut
 from app.schemas.resume import ReferralMessageOut
 from app.services import job_service, ai_parser
 from app.services.skills import normalize_skill_terms
@@ -120,6 +120,16 @@ async def discover_status():
     return _discovery_state
 
 
+@router.post("/rescore-all", response_model=dict)
+async def rescore_all(db: AsyncSession = Depends(get_db)):
+    """
+    Re-run rule-based scoring for every analyzed job against the current master
+    resume. No AI calls — safe and cheap to re-run after editing your resume or
+    changing scoring rules.
+    """
+    return await job_service.rescore_all_jobs(db)
+
+
 @router.get("/{job_id}", response_model=JobDetailOut)
 async def get_job(job_id: UUID, db: AsyncSession = Depends(get_db)):
     job = await job_service.get_job_detail(db, job_id)
@@ -145,7 +155,12 @@ async def rescore_job(job_id: UUID, db: AsyncSession = Depends(get_db)):
     if not job.analysis:
         raise HTTPException(status_code=400, detail="Job not yet analyzed")
 
-    from app.services.job_service import _get_master_resume, _get_company
+    from app.services.job_service import (
+        _apply_breakdown,
+        _get_company,
+        _get_master_resume,
+        resume_skills_for_scoring,
+    )
     from app.services.scorer import compute_score
 
     resume = await _get_master_resume(db)
@@ -154,7 +169,7 @@ async def rescore_job(job_id: UUID, db: AsyncSession = Depends(get_db)):
     breakdown = compute_score(
         analysis=job.analysis.raw_ai_response,
         jd_text_lower=job.raw_text.lower(),
-        resume_matched_skills=resume.skills if resume else [],
+        resume_matched_skills=resume_skills_for_scoring(resume),
         company_h1b_total=company.h1b_total_filings if company else 0,
         company_h1b_rate=company.h1b_approval_rate if company else None,
         company_swe_filings=company.h1b_swe_filings if company else 0,
@@ -163,20 +178,27 @@ async def rescore_job(job_id: UUID, db: AsyncSession = Depends(get_db)):
 
     score = job.match_score
     if score:
-        score.overall_score = breakdown.total
-        score.score_h1b = breakdown.h1b
-        score.score_level = breakdown.level
-        score.score_skills = breakdown.skills
-        score.score_location = breakdown.location
-        score.score_company = breakdown.company
-        score.score_product = breakdown.product
-        score.is_auto_rejected = breakdown.is_auto_rejected
-        score.auto_reject_reasons = breakdown.auto_reject_reasons
-        score.recommendation = breakdown.recommendation
-        score.recommendation_reason = breakdown.recommendation_reason
+        _apply_breakdown(score, breakdown)
         db.add(score)
 
     return score
+
+
+@router.post("/{job_id}/tailor-resume", response_model=ResumeTailoringOut)
+async def tailor_resume(job_id: UUID, db: AsyncSession = Depends(get_db)):
+    """Generate a fresh JD-tailored resume rewrite + coaching notes for this job."""
+    try:
+        return await job_service.generate_resume_tailoring(db, job_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+
+
+@router.get("/{job_id}/tailor-resume", response_model=ResumeTailoringOut | None)
+async def get_tailored_resume(job_id: UUID, db: AsyncSession = Depends(get_db)):
+    """Return the most recently generated tailoring for this job, if any."""
+    return await job_service.get_latest_tailoring(db, job_id)
 
 
 @router.get("/{job_id}/referral", response_model=ReferralMessageOut)
@@ -187,7 +209,7 @@ async def get_referral_message(job_id: UUID, db: AsyncSession = Depends(get_db))
 
     analysis = job.analysis
     resume = await job_service._get_master_resume(db)
-    resume_skills = resume.skills if resume else []
+    resume_skills = job_service.resume_skills_for_scoring(resume)
 
     skill_overlap = list(
         normalize_skill_terms(analysis.required_skills + analysis.tech_stack)

@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { resumeApi } from "@/api/resume";
+import { jobsApi } from "@/api/jobs";
 import { PageLoader } from "@/components/common/Loading";
 import dayjs from "dayjs";
 
@@ -36,6 +38,14 @@ export default function ResumePage() {
   const del = useMutation({
     mutationFn: resumeApi.delete,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["resumes"] }),
+  });
+
+  const rescoreAll = useMutation({
+    mutationFn: jobsApi.rescoreAll,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["jobs"] });
+      qc.invalidateQueries({ queryKey: ["resume-gaps"] });
+    },
   });
 
   const reset = () => {
@@ -76,11 +86,53 @@ export default function ResumePage() {
           </p>
         </div>
         {!showForm && (
-          <button className="btn-primary" onClick={() => setShowForm(true)}>
-            + Add Resume
-          </button>
+          <div className="flex gap-2 flex-shrink-0">
+            <button
+              className="btn-secondary"
+              onClick={() => rescoreAll.mutate()}
+              disabled={rescoreAll.isPending || resumes.length === 0}
+            >
+              {rescoreAll.isPending ? "Re-scoring..." : "Re-score all jobs"}
+            </button>
+            <button className="btn-primary" onClick={() => setShowForm(true)}>
+              + Add Resume
+            </button>
+          </div>
         )}
       </div>
+
+      {rescoreAll.isError && (
+        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          {rescoreAll.error.message}
+        </div>
+      )}
+
+      {rescoreAll.data && !rescoreAll.isPending && (
+        <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm">
+          <p className="text-green-800">
+            Re-scored <span className="font-semibold">{rescoreAll.data.rescored}</span> jobs against{" "}
+            "{rescoreAll.data.resume_name}" ({rescoreAll.data.resume_skill_count} skills) —{" "}
+            <span className="font-semibold">{rescoreAll.data.score_changed}</span> scores changed.
+          </p>
+          {rescoreAll.data.recommendation_changes?.length > 0 && (
+            <div className="mt-2 space-y-0.5">
+              <p className="text-xs font-medium text-green-700">
+                {rescoreAll.data.recommendation_changes.length} recommendation changes:
+              </p>
+              {rescoreAll.data.recommendation_changes.slice(0, 8).map((c) => (
+                <Link
+                  key={c.job_id}
+                  to={`/jobs/${c.job_id}`}
+                  className="block text-xs text-green-700 hover:underline truncate"
+                >
+                  {c.from_recommendation} → <span className="font-medium">{c.to_recommendation}</span>{" "}
+                  ({c.from_score} → {c.to_score}) · {c.title || "Untitled"} — {c.company_name || "?"}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={handleSubmit} className="card p-6 space-y-4">
