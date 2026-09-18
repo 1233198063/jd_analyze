@@ -17,6 +17,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.job import Job, ResumeTailoring
 from app.models.resume import Resume
+from app.models.skill_study import SkillStudy, StudyStatus
 from app.services.skills import SKILL_SYNONYMS, extract_skills_from_text, normalize_skill_terms
 
 # Role buckets, matched against the job title in order — first hit wins.
@@ -108,6 +109,7 @@ async def analyze_resume_gaps(db: AsyncSession, scope: str = "all") -> dict:
             "gaps": [],
             "by_role": [],
             "strengths": [],
+            "reading_progress": {"want_to_read": 0, "reading": 0, "finished": 0},
         }
 
     # Recompute from raw_text rather than trusting resume.skills: that column is a
@@ -144,6 +146,7 @@ async def analyze_resume_gaps(db: AsyncSession, scope: str = "all") -> dict:
             "gaps": [],
             "by_role": [],
             "strengths": [],
+            "reading_progress": {"want_to_read": 0, "reading": 0, "finished": 0},
         }
 
     # Coaching notes harvested from any AI tailorings already generated, keyed by skill.
@@ -155,6 +158,9 @@ async def analyze_resume_gaps(db: AsyncSession, scope: str = "all") -> dict:
             how = entry.get("how_to_learn")
             if skill and how and skill not in coaching:
                 coaching[skill] = how
+
+    studies = (await db.execute(select(SkillStudy))).scalars().all()
+    by_skill = {s.skill: s for s in studies}
 
     stats: dict[str, dict] = defaultdict(
         lambda: {"required": 0, "nice": 0, "roles": Counter(), "scores": [], "examples": []}
@@ -214,6 +220,7 @@ async def analyze_resume_gaps(db: AsyncSession, scope: str = "all") -> dict:
             "top_roles": [{"role": r, "count": c} for r, c in entry["roles"].most_common(3)],
             "how_to_learn": coaching.get(skill),
             "example_jobs": entry["examples"],
+            "study": by_skill.get(skill),
         })
     gaps.sort(key=lambda g: g["priority_score"], reverse=True)
 
@@ -247,6 +254,8 @@ async def analyze_resume_gaps(db: AsyncSession, scope: str = "all") -> dict:
         if skill in resume_skills
     ][:12]
 
+    status_counts = Counter(s.status for s in studies)
+
     return {
         "meta": {
             "resume_name": resume.name,
@@ -258,4 +267,9 @@ async def analyze_resume_gaps(db: AsyncSession, scope: str = "all") -> dict:
         "gaps": gaps,
         "by_role": by_role,
         "strengths": strengths,
+        "reading_progress": {
+            "want_to_read": status_counts[StudyStatus.want_to_read],
+            "reading": status_counts[StudyStatus.reading],
+            "finished": status_counts[StudyStatus.finished],
+        },
     }
