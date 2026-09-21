@@ -7,6 +7,7 @@ export const jobsApi = {
   rescore: (id) => client.post(`/jobs/${id}/rescore`).then((r) => r.data),
   rescoreAll: () => client.post("/jobs/rescore-all").then((r) => r.data),
   getReferral: (id) => client.get(`/jobs/${id}/referral`).then((r) => r.data),
+  getCoverLetter: (id) => client.get(`/jobs/${id}/cover-letter`).then((r) => r.data),
   tailorResume: (id) => client.post(`/jobs/${id}/tailor-resume`).then((r) => r.data),
   getTailoredResume: (id) => client.get(`/jobs/${id}/tailor-resume`).then((r) => r.data),
   discoverStart: () => client.post("/jobs/discover").then((r) => r.data),

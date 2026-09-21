@@ -5,7 +5,7 @@ from uuid import UUID
 
 from app.core.database import get_db
 from app.schemas.job import JobCreate, JobDetailOut, JobListItem, JobOut, ResumeMatchScoreOut, ResumeTailoringOut
-from app.schemas.resume import ReferralMessageOut
+from app.schemas.resume import ReferralMessageOut, CoverLetterOut
 from app.services import job_service, ai_parser
 from app.services.skills import normalize_skill_terms
 from app.models.job import Job
@@ -236,4 +236,40 @@ async def get_referral_message(job_id: UUID, db: AsyncSession = Depends(get_db))
         message=referral_data.get("message", ""),
         subject_line=referral_data.get("subject", ""),
         tips=referral_data.get("tips", []),
+    )
+
+
+@router.get("/{job_id}/cover-letter", response_model=CoverLetterOut)
+async def get_cover_letter(job_id: UUID, db: AsyncSession = Depends(get_db)):
+    """Generate a fresh, resume-grounded cover letter draft for this job."""
+    job = await job_service.get_job_detail(db, job_id)
+    if not job or not job.analysis:
+        raise HTTPException(status_code=404, detail="Job or analysis not found")
+
+    analysis = job.analysis
+    resume = await job_service._get_master_resume(db)
+    if not resume:
+        raise HTTPException(status_code=400, detail="No master resume set — add one on the Resume page first")
+
+    key_requirements = (analysis.required_skills or []) + (analysis.tech_stack or [])
+
+    try:
+        letter_data = ai_parser.generate_cover_letter(
+            resume_text=resume.raw_text,
+            company_name=analysis.company_name or "the company",
+            title=analysis.title or "Software Engineer",
+            level=analysis.level.value,
+            job_summary=analysis.summary or "",
+            key_requirements=key_requirements,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+
+    return CoverLetterOut(
+        job_id=job_id,
+        company_name=analysis.company_name,
+        title=analysis.title,
+        greeting=letter_data.get("greeting", ""),
+        body=letter_data.get("body", ""),
+        sign_off=letter_data.get("sign_off", "Sincerely,"),
     )
