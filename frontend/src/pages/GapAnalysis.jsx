@@ -19,9 +19,9 @@ const SPINE = {
 };
 
 const SHELF_STATUS = [
-  { key: "want_to_read", label: "想读", active: "bg-slate-200 text-slate-700" },
-  { key: "reading", label: "在读", active: "bg-amber-200 text-amber-800" },
-  { key: "finished", label: "已读", active: "bg-green-200 text-green-800" },
+  { key: "want_to_read", label: "To Read", active: "bg-slate-200 text-slate-700" },
+  { key: "reading", label: "Reading", active: "bg-amber-200 text-amber-800" },
+  { key: "finished", label: "Finished", active: "bg-green-200 text-green-800" },
 ];
 
 function ShelfControls({ skill, current }) {
@@ -53,7 +53,7 @@ function ShelfControls({ skill, current }) {
               "font-hand text-base px-2 py-0.5 rounded-md transition-colors leading-none",
               on ? s.active : "text-gray-400 hover:bg-gray-100"
             )}
-            title={on ? "再点一次取消" : `标记为${s.label}`}
+            title={on ? "Click again to clear" : `Mark as ${s.label}`}
           >
             {s.label}
           </button>
@@ -104,7 +104,7 @@ function GapRow({ gap }) {
               {gap.skill}
             </span>
             {!finished && <PriorityBadge priority={gap.priority} />}
-            {finished && <Badge variant="green">已读 ✓</Badge>}
+            {finished && <Badge variant="green">Finished ✓</Badge>}
             <span className="text-xs text-gray-500 whitespace-nowrap">
               {gap.jd_count} JDs · {gap.frequency_pct}%
             </span>
@@ -131,7 +131,7 @@ function GapRow({ gap }) {
 
         {finished && (
           <p className="text-xs text-green-700 px-3 pt-2">
-            学完了 —— 记得把它写进简历，下次重算分数时这本书就会从书单上消失。
+            Finished — add it to your resume, and it'll drop off this list next time scores are recalculated.
           </p>
         )}
 
@@ -207,10 +207,10 @@ export default function GapAnalysis() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
             Resume Gaps
-            <span className="font-hand text-2xl text-gray-400 ml-2">技能书单</span>
+            <span className="font-hand text-2xl text-gray-400 ml-2">Reading List</span>
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            What your JD history keeps asking for that your resume doesn't show — 一本本读完它。
+            What your JD history keeps asking for that your resume doesn't show — read through it one by one.
           </p>
         </div>
         <div className="flex gap-1 p-1 bg-gray-100 rounded-lg flex-shrink-0">
@@ -253,7 +253,7 @@ export default function GapAnalysis() {
                 value: gaps.filter((g) => g.jd_count >= 2).length,
                 sub: `wanted by 2+ JDs · ${gaps.length} incl. one-offs`,
               },
-              { label: "已读 · 在读", value: `${reading.finished} · ${reading.reading}`, sub: `想读 ${reading.want_to_read}` },
+              { label: "Finished · Reading", value: `${reading.finished} · ${reading.reading}`, sub: `To read: ${reading.want_to_read}` },
               { label: "High priority", value: highCount, sub: "learn these first" },
             ].map((s) => (
               <div key={s.label} className="card p-4">
@@ -265,8 +265,8 @@ export default function GapAnalysis() {
           </div>
 
           <Section
-            title="想读书单 · Reading List"
-            subtitle={`按被要求的频率排序，硬性要求和高分岗位权重更高。基于 ${meta.jobs_considered} 份 JD 与「${meta.resume_name}」的比对。点右侧「想读 / 在读 / 已读」标记进度。`}
+            title="Reading List"
+            subtitle={`Sorted by how often it's requested, weighted toward hard requirements and higher-scoring jobs. Based on ${meta.jobs_considered} JDs compared against "${meta.resume_name}". Use the To Read / Reading / Finished buttons on the right to track progress.`}
           >
             <div className="space-y-1.5">
               {gaps.slice(0, 25).map((g) => (

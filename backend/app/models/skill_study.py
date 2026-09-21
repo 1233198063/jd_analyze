@@ -9,9 +9,9 @@ from app.core.database import Base
 
 
 class StudyStatus(str, enum.Enum):
-    want_to_read = "want_to_read"   # 想读
-    reading = "reading"             # 在读
-    finished = "finished"           # 已读
+    want_to_read = "want_to_read"
+    reading = "reading"
+    finished = "finished"
 
 
 class SkillStudy(Base):

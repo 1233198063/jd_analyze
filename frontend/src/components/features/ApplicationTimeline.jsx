@@ -110,7 +110,7 @@ export default function ApplicationTimeline({ applicationId }) {
       <div className="flex items-baseline justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-700">
           Application Timeline
-          <span className="font-hand text-lg text-gray-400 ml-2">投递手账</span>
+          <span className="font-hand text-lg text-gray-400 ml-2">Journal</span>
         </h3>
         {appliedAt && (
           <p className="text-xs text-gray-400">

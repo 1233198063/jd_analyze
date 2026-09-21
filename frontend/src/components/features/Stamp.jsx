@@ -6,15 +6,15 @@ import clsx from "clsx";
  * the tracker is read most often on bad days.
  */
 export const STAMPS = {
-  saved: { emoji: "🔖", label: "收藏", bg: "bg-gray-100", border: "border-gray-300", text: "text-gray-500" },
-  applied: { emoji: "📮", label: "投递", bg: "bg-blue-50", border: "border-blue-300", text: "text-blue-600" },
-  referral_asked: { emoji: "💌", label: "内推", bg: "bg-purple-50", border: "border-purple-300", text: "text-purple-600" },
-  oa: { emoji: "✏️", label: "笔试", bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-600" },
-  phone_screen: { emoji: "☎️", label: "电话", bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-600" },
-  interview: { emoji: "💬", label: "面试", bg: "bg-orange-50", border: "border-orange-300", text: "text-orange-600" },
+  saved: { emoji: "🔖", label: "Saved", bg: "bg-gray-100", border: "border-gray-300", text: "text-gray-500" },
+  applied: { emoji: "📮", label: "Applied", bg: "bg-blue-50", border: "border-blue-300", text: "text-blue-600" },
+  referral_asked: { emoji: "💌", label: "Referral", bg: "bg-purple-50", border: "border-purple-300", text: "text-purple-600" },
+  oa: { emoji: "✏️", label: "OA", bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-600" },
+  phone_screen: { emoji: "☎️", label: "Phone Screen", bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-600" },
+  interview: { emoji: "💬", label: "Interview", bg: "bg-orange-50", border: "border-orange-300", text: "text-orange-600" },
   offer: { emoji: "🌸", label: "Offer", bg: "bg-green-50", border: "border-green-300", text: "text-green-600" },
-  rejected: { emoji: "🍂", label: "缘分未到", bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-500" },
-  withdrawn: { emoji: "🕊️", label: "已撤回", bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-400" },
+  rejected: { emoji: "🍂", label: "Not This Time", bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-500" },
+  withdrawn: { emoji: "🕊️", label: "Withdrawn", bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-400" },
 };
 
 const SIZES = {
