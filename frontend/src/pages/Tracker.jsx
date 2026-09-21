@@ -95,7 +95,7 @@ function StampCollection({ kanban }) {
   return (
     <div className="flex items-center gap-3 flex-wrap px-1">
       <span className="text-xs text-gray-400 whitespace-nowrap">
-        本月印章 · {stamps.length} 枚
+        Stamps this month · {stamps.length}
       </span>
       <div className="flex flex-wrap gap-1 opacity-75">
         {stamps.map((e, i) => (
@@ -144,7 +144,7 @@ function AppRow({ item, colStatus }) {
               rel="noopener noreferrer"
               className="text-xs text-blue-600 hover:underline"
             >
-              投递链接 ↗
+              Application Link ↗
             </a>
           )}
         </div>
