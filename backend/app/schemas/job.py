@@ -149,6 +149,7 @@ class ResumeTailoringOut(BaseModel):
     integration_suggestions: list[dict]
     trade_off_notes: list[dict]
     learning_gaps: list[dict]
+    change_notes: list[dict] = []
     created_at: datetime
 
     model_config = {"from_attributes": True}

@@ -10,6 +10,33 @@ export const jobsApi = {
   getCoverLetter: (id) => client.get(`/jobs/${id}/cover-letter`).then((r) => r.data),
   tailorResume: (id) => client.post(`/jobs/${id}/tailor-resume`).then((r) => r.data),
   getTailoredResume: (id) => client.get(`/jobs/${id}/tailor-resume`).then((r) => r.data),
+  // Streams raw text chunks from the tailor-resume protocol (===RESUME===...===META===...===END===).
+  // onChunk(delta, fullTextSoFar) fires as each piece arrives; resolves with the full text at the end.
+  tailorResumeStream: async (id, onChunk, signal) => {
+    const res = await fetch(`/api/v1/jobs/${id}/tailor-resume/stream`, { method: "POST", signal });
+    if (!res.ok) {
+      let detail = `Stream request failed (${res.status})`;
+      try {
+        detail = (await res.json())?.detail || detail;
+      } catch {
+        // response body wasn't JSON — keep the generic message
+      }
+      throw new Error(detail);
+    }
+    if (!res.body) throw new Error("Streaming not supported by this browser/response");
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let full = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const delta = decoder.decode(value, { stream: true });
+      full += delta;
+      onChunk(delta, full);
+    }
+    return full;
+  },
   discoverStart: () => client.post("/jobs/discover").then((r) => r.data),
   discoverStatus: () => client.get("/jobs/discover/status").then((r) => r.data),
 };

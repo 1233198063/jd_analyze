@@ -192,30 +192,43 @@ RESUME TEXT:
 JOB ANALYSIS (parsed from the JD):
 {job_analysis_json}
 
-TASK — return all five of these:
+TASK — produce all six of these:
 1. tailored_text: the rewritten resume (plain text, same structure/sections as the original), \
 reordered and reworded to foreground what's relevant to this JD and naturally use the JD's own \
 terminology wherever it's already truthfully supported.
-2. keyword_coverage: for each important keyword drawn from the JD's required_skills, \
+2. change_notes: a running list of the edits you made versus the original, in the order they'd be \
+encountered reading top to bottom — each one a short change (what you changed, e.g. "Moved the Redis \
+caching bullet to the top of the Backend Co. entry"), a reason (why, tied to this JD, e.g. "JD lists \
+caching/Redis as a required skill"), and fills_gap (the exact skill/keyword name from the JD this edit \
+newly surfaces, or null if it's just reordering/rephrasing without covering a new requirement).
+3. keyword_coverage: for each important keyword drawn from the JD's required_skills, \
 nice_to_have_skills, and tech_stack — whether it appears in the original resume, whether it appears \
 in tailored_text, and covered_via (which bullet/section it now lives in, or null if not covered).
-3. integration_suggestions: JD skills missing from the resume that can be honestly folded into an \
+4. integration_suggestions: JD skills missing from the resume that can be honestly folded into an \
 EXISTING bullet/project — each with the target_bullet (quote or closely paraphrase the existing resume \
 line), suggested_addition (exact text to weave in), how_to_explain (the talking points the candidate \
 should be ready to give in an interview), and honesty_note (what they must actually be able to speak \
 to, or go verify/practice, before adding this).
-4. trade_off_notes: for notable technology choices reflected in tailored_text (existing or newly \
+5. trade_off_notes: for notable technology choices reflected in tailored_text (existing or newly \
 surfaced) that an interviewer is likely to probe with "why X and not Y" — the trade-off explanation to \
 give, the alternatives_considered (similar/competing technologies), why_not_alternatives, and \
 how_to_explain as a ready-to-say answer.
-5. learning_gaps: skills/technologies/experience that show up meaningfully in this JD that the \
+6. learning_gaps: skills/technologies/experience that show up meaningfully in this JD that the \
 candidate does not have and could NOT be honestly folded into existing experience (so they do NOT \
 appear anywhere in tailored_text) — why_it_matters for this type of role, how_to_learn (a concrete, \
 fast way to start), and priority (high/medium/low based on how central it is to this JD).
 
-Return valid JSON only, no markdown, no commentary, in exactly this structure:
+Respond with EXACTLY this format — a plain-text block, then a JSON block, no markdown fencing, no \
+commentary before/after. This exact protocol matters because the response is parsed while it's still \
+streaming in:
+
+===RESUME===
+<the full tailored_text here, as plain text, nothing else on these lines>
+===META===
 {{
-  "tailored_text": "...",
+  "change_notes": [
+    {{"change": "...", "reason": "...", "fills_gap": "..." or null}}
+  ],
   "keyword_coverage": [
     {{"keyword": "...", "in_original_resume": true/false, "in_tailored_resume": true/false, "covered_via": "..." or null}}
   ],
@@ -228,7 +241,8 @@ Return valid JSON only, no markdown, no commentary, in exactly this structure:
   "learning_gaps": [
     {{"skill": "...", "why_it_matters": "...", "how_to_learn": "...", "priority": "high"/"medium"/"low"}}
   ]
-}}"""
+}}
+===END==="""
 
 
 def _call(prompt: str, max_tokens: int = 2048) -> str:
@@ -239,6 +253,22 @@ def _call(prompt: str, max_tokens: int = 2048) -> str:
         messages=[{"role": "user", "content": prompt}],
     )
     return response.choices[0].message.content.strip()
+
+
+def _call_stream(prompt: str, max_tokens: int = 4096):
+    """Yields raw text deltas from a streaming chat completion (no JSON response_format —
+    streamed output can't be valid JSON until the final token, so callers that need JSON mid-stream
+    use a delimited plain-text protocol instead, e.g. TAILOR_RESUME_PROMPT)."""
+    stream = client.chat.completions.create(
+        model=MODEL,
+        max_tokens=max_tokens,
+        stream=True,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    for chunk in stream:
+        delta = chunk.choices[0].delta.content
+        if delta:
+            yield delta
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
@@ -258,16 +288,50 @@ def score_resume_vs_job(resume_text: str, job_analysis: dict) -> dict:
     return json.loads(raw)
 
 
+def parse_tailor_stream_output(full_text: str) -> dict:
+    """Parses the ===RESUME===/===META===/===END=== protocol produced by TAILOR_RESUME_PROMPT."""
+    resume_marker, meta_marker, end_marker = "===RESUME===", "===META===", "===END==="
+
+    resume_start = full_text.find(resume_marker)
+    meta_start = full_text.find(meta_marker)
+    if resume_start == -1 or meta_start == -1:
+        raise ValueError("Malformed tailoring response: missing protocol markers")
+
+    end_pos = full_text.find(end_marker)
+    tailored_text = full_text[resume_start + len(resume_marker):meta_start].strip("\n")
+    meta_text = full_text[meta_start + len(meta_marker):end_pos if end_pos != -1 else len(full_text)]
+    meta = json.loads(meta_text.strip())
+
+    return {
+        "tailored_text": tailored_text,
+        "change_notes": meta.get("change_notes", []),
+        "keyword_coverage": meta.get("keyword_coverage", []),
+        "integration_suggestions": meta.get("integration_suggestions", []),
+        "trade_off_notes": meta.get("trade_off_notes", []),
+        "learning_gaps": meta.get("learning_gaps", []),
+    }
+
+
+def _tailor_prompt(resume_text: str, job_analysis: dict) -> str:
+    return TAILOR_RESUME_PROMPT.format(
+        resume_text=resume_text[:8000],
+        job_analysis_json=json.dumps(job_analysis, indent=2)[:4000],
+    )
+
+
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def tailor_resume(resume_text: str, job_analysis: dict) -> dict:
-    raw = _call(
-        TAILOR_RESUME_PROMPT.format(
-            resume_text=resume_text[:8000],
-            job_analysis_json=json.dumps(job_analysis, indent=2)[:4000],
-        ),
-        max_tokens=4096,
-    )
-    return json.loads(raw)
+    full_text = "".join(_call_stream(_tailor_prompt(resume_text, job_analysis)))
+    return parse_tailor_stream_output(full_text)
+
+
+def tailor_resume_stream(resume_text: str, job_analysis: dict):
+    """Generator yielding raw text chunks live as the model writes them.
+
+    Consumers track the ===RESUME===/===META=== markers to show a running preview, then call
+    parse_tailor_stream_output() on the full buffered text once the stream ends.
+    """
+    yield from _call_stream(_tailor_prompt(resume_text, job_analysis))
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))

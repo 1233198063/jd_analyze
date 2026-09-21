@@ -357,6 +357,7 @@ async def generate_resume_tailoring(db: AsyncSession, job_id: UUID) -> ResumeTai
         integration_suggestions=ai_data.get("integration_suggestions", []),
         trade_off_notes=ai_data.get("trade_off_notes", []),
         learning_gaps=ai_data.get("learning_gaps", []),
+        change_notes=ai_data.get("change_notes", []),
     )
     db.add(tailoring)
     await db.flush()

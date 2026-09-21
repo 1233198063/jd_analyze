@@ -174,6 +174,8 @@ class ResumeTailoring(Base):
     trade_off_notes: Mapped[list] = mapped_column(JSONB, default=list)
     # [{skill, why_it_matters, how_to_learn, priority}]
     learning_gaps: Mapped[list] = mapped_column(JSONB, default=list)
+    # [{change, reason, fills_gap}] — ordered narrative of what was edited and why
+    change_notes: Mapped[list] = mapped_column(JSONB, default=list)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
