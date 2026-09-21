@@ -1,14 +1,15 @@
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
-from app.core.database import get_db
+from app.core.database import get_db, AsyncSessionLocal
 from app.schemas.job import JobCreate, JobDetailOut, JobListItem, JobOut, ResumeMatchScoreOut, ResumeTailoringOut
 from app.schemas.resume import ReferralMessageOut, CoverLetterOut
 from app.services import job_service, ai_parser
 from app.services.skills import normalize_skill_terms
-from app.models.job import Job
+from app.models.job import Job, ResumeTailoring
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -199,6 +200,60 @@ async def tailor_resume(job_id: UUID, db: AsyncSession = Depends(get_db)):
 async def get_tailored_resume(job_id: UUID, db: AsyncSession = Depends(get_db)):
     """Return the most recently generated tailoring for this job, if any."""
     return await job_service.get_latest_tailoring(db, job_id)
+
+
+@router.post("/{job_id}/tailor-resume/stream")
+async def tailor_resume_stream(job_id: UUID, db: AsyncSession = Depends(get_db)):
+    """Stream the tailored resume live as the AI writes it, using a delimited plain-text protocol
+    (===RESUME=== ... ===META=== ... ===END===) so the client can render a running preview before
+    the JSON coaching-notes block is even complete. Persists the finished result once the stream ends,
+    same as the non-streaming POST /tailor-resume.
+    """
+    job = await job_service.get_job_detail(db, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not job.analysis:
+        raise HTTPException(status_code=400, detail="Job not yet analyzed")
+
+    resume = await job_service._get_master_resume(db)
+    if not resume:
+        raise HTTPException(status_code=400, detail="No master resume set — add one on the Resume page first")
+
+    resume_id = resume.id
+    resume_text = resume.raw_text
+    job_analysis = job.analysis.raw_ai_response
+
+    async def event_stream():
+        chunks: list[str] = []
+        try:
+            for piece in ai_parser.tailor_resume_stream(resume_text, job_analysis):
+                chunks.append(piece)
+                yield piece
+        except Exception as e:
+            yield f"\n===STREAM_ERROR===\n{e}"
+            return
+
+        full_text = "".join(chunks)
+        try:
+            parsed = ai_parser.parse_tailor_stream_output(full_text)
+        except Exception:
+            return  # client already has the raw streamed text; nothing to persist
+
+        async with AsyncSessionLocal() as save_db:
+            tailoring = ResumeTailoring(
+                job_id=job_id,
+                resume_id=resume_id,
+                tailored_text=parsed["tailored_text"],
+                keyword_coverage=parsed["keyword_coverage"],
+                integration_suggestions=parsed["integration_suggestions"],
+                trade_off_notes=parsed["trade_off_notes"],
+                learning_gaps=parsed["learning_gaps"],
+                change_notes=parsed["change_notes"],
+            )
+            save_db.add(tailoring)
+            await save_db.commit()
+
+    return StreamingResponse(event_stream(), media_type="text/plain")
 
 
 @router.get("/{job_id}/referral", response_model=ReferralMessageOut)

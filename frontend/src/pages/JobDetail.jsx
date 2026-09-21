@@ -326,7 +326,7 @@ export default function JobDetail() {
       </div>
 
       {/* Tailor resume */}
-      {!rejected && analysis && <ResumeTailorPanel jobId={jobId} />}
+      {!rejected && analysis && <ResumeTailorPanel jobId={jobId} jobTitle={analysis?.title} />}
 
       {/* Red flags */}
       {analysis && (
