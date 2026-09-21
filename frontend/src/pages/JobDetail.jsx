@@ -38,6 +38,8 @@ export default function JobDetail() {
   const qc = useQueryClient();
   const [referralOpen, setReferralOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [coverLetterOpen, setCoverLetterOpen] = useState(false);
+  const [coverLetterCopied, setCoverLetterCopied] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["job", jobId],
@@ -48,6 +50,16 @@ export default function JobDetail() {
     queryKey: ["referral", jobId],
     queryFn: () => jobsApi.getReferral(jobId),
     enabled: referralOpen,
+  });
+
+  const {
+    data: coverLetter,
+    isLoading: coverLetterLoading,
+    error: coverLetterError,
+  } = useQuery({
+    queryKey: ["cover-letter", jobId],
+    queryFn: () => jobsApi.getCoverLetter(jobId),
+    enabled: coverLetterOpen,
   });
 
   const trackApp = useMutation({
@@ -90,6 +102,14 @@ export default function JobDetail() {
     navigator.clipboard.writeText(referral?.message || "");
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const copyCoverLetter = () => {
+    if (!coverLetter) return;
+    const full = `${coverLetter.greeting}\n\n${coverLetter.body}\n\n${coverLetter.sign_off}`;
+    navigator.clipboard.writeText(full);
+    setCoverLetterCopied(true);
+    setTimeout(() => setCoverLetterCopied(false), 2000);
   };
 
   return (
@@ -365,6 +385,12 @@ export default function JobDetail() {
             >
               Generate Referral Message
             </button>
+            <button
+              className="btn-secondary"
+              onClick={() => setCoverLetterOpen(true)}
+            >
+              Generate Cover Letter
+            </button>
           </>
         )}
         <button
@@ -382,13 +408,13 @@ export default function JobDetail() {
       {/* Application link */}
       <div className="card p-4">
         <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-          投递链接 Application Link
+          Application Link
         </label>
         <div className="flex gap-2 mt-2">
           <input
             type="url"
             className="input flex-1"
-            placeholder="https://... (投递后台/确认邮件链接)"
+            placeholder="https://... (application portal or confirmation email link)"
             value={applyUrlDraft ?? job.apply_url ?? ""}
             onChange={(e) => setApplyUrlDraft(e.target.value)}
           />
@@ -406,7 +432,7 @@ export default function JobDetail() {
               rel="noopener noreferrer"
               className="btn-secondary whitespace-nowrap"
             >
-              打开 ↗
+              Open ↗
             </a>
           )}
         </div>
@@ -453,6 +479,49 @@ export default function JobDetail() {
                   onClick={copy}
                 >
                   {copied ? "Copied!" : "Copy Message"}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* Cover letter modal */}
+      {coverLetterOpen && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-gray-900">Cover Letter Draft</h3>
+              <button
+                onClick={() => setCoverLetterOpen(false)}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {coverLetterLoading ? (
+              <div className="py-8 text-center text-sm text-gray-500">Generating...</div>
+            ) : coverLetterError ? (
+              <p className="text-sm text-red-600">{coverLetterError.message}</p>
+            ) : coverLetter ? (
+              <div className="space-y-4">
+                <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-800 whitespace-pre-wrap border border-gray-200 max-h-96 overflow-y-auto">
+                  {coverLetter.greeting}
+                  {"\n\n"}
+                  {coverLetter.body}
+                  {"\n\n"}
+                  {coverLetter.sign_off}
+                </div>
+                <p className="text-xs text-gray-400">
+                  A first draft, grounded in your master resume — review before sending, and adjust the
+                  opening to sound like you.
+                </p>
+                <button
+                  className="btn-primary w-full justify-center"
+                  onClick={copyCoverLetter}
+                >
+                  {coverLetterCopied ? "Copied!" : "Copy Cover Letter"}
                 </button>
               </div>
             ) : null}

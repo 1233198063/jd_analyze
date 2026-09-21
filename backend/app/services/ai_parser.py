@@ -131,6 +131,38 @@ Return JSON only:
 }}"""
 
 
+COVER_LETTER_PROMPT = """You are an expert technical career coach writing a cover letter for an \
+international student (OPT/STEM OPT/H-1B) applying to one specific job. Never invent companies, \
+titles, dates, metrics, or projects that are not already in the resume text below — only reword, \
+reorder, and emphasize what's genuinely there.
+
+RESUME TEXT:
+{resume_text}
+
+JOB:
+Company: {company_name}
+Title: {title}
+Level: {level}
+Job summary: {job_summary}
+Key requirements: {key_requirements}
+
+Requirements:
+- 3-4 short paragraphs, under 350 words total
+- Open with genuine, specific interest in this role/company (not generic flattery)
+- Connect 2-3 concrete pieces of the candidate's real experience (from the resume text) to the JD's \
+actual requirements
+- Confident, natural tone — no clichés like "I am writing to express my interest" or "team player"
+- Do not mention visa/sponsorship status unless the resume text itself already discusses it
+- Close with a brief, low-pressure call to action
+
+Return JSON only:
+{{
+  "greeting": "e.g. 'Dear Hiring Manager,' or 'Dear {company_name} Team,'",
+  "body": "the full letter body, paragraphs separated by \\n\\n, not including greeting or sign-off",
+  "sign_off": "e.g. 'Sincerely,'"
+}}"""
+
+
 TAILOR_RESUME_PROMPT = """You are an expert technical resume writer and interview coach helping an \
 international student (OPT/STEM OPT/H-1B) tailor their resume for one specific job, without ever \
 misrepresenting their real experience.
@@ -255,5 +287,28 @@ def generate_referral_message(
             top_skills=top_skills,
         ),
         max_tokens=512,
+    )
+    return json.loads(raw)
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+def generate_cover_letter(
+    resume_text: str,
+    company_name: str,
+    title: str,
+    level: str,
+    job_summary: str,
+    key_requirements: list[str],
+) -> dict:
+    raw = _call(
+        COVER_LETTER_PROMPT.format(
+            resume_text=resume_text[:8000],
+            company_name=company_name,
+            title=title,
+            level=level,
+            job_summary=job_summary or "(no summary available)",
+            key_requirements=", ".join(key_requirements[:8]) or "(none listed)",
+        ),
+        max_tokens=1024,
     )
     return json.loads(raw)

@@ -36,3 +36,12 @@ class ReferralMessageOut(BaseModel):
     message: str
     subject_line: str
     tips: list[str]
+
+
+class CoverLetterOut(BaseModel):
+    job_id: UUID
+    company_name: Optional[str]
+    title: Optional[str]
+    greeting: str
+    body: str
+    sign_off: str
