@@ -4,6 +4,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { resumeApi } from "@/api/resume";
 import { jobsApi } from "@/api/jobs";
 import { PageLoader } from "@/components/common/Loading";
+import ResumePreview from "@/components/features/ResumePreview";
+import { classifyLines, extractCandidateName, buildResumeFilename } from "@/utils/resumeFormat";
+import { printElementAsPdf } from "@/utils/printElement";
 import dayjs from "dayjs";
 
 export default function ResumePage() {
@@ -12,6 +15,7 @@ export default function ResumePage() {
   const [rawText, setRawText] = useState("");
   const [isMaster, setIsMaster] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [previewId, setPreviewId] = useState(null);
   const qc = useQueryClient();
 
   const { data: resumes = [], isLoading } = useQuery({
@@ -62,6 +66,11 @@ export default function ResumePage() {
     setRawText(r.raw_text);
     setIsMaster(r.is_master);
     setShowForm(true);
+  };
+
+  const downloadPdf = (r) => {
+    const filename = buildResumeFilename(extractCandidateName(r.raw_text), r.name);
+    printElementAsPdf(`resume-pdf-${r.id}`, filename);
   };
 
   const handleSubmit = (e) => {
@@ -212,6 +221,12 @@ export default function ResumePage() {
               </div>
 
               <div className="flex gap-2 flex-shrink-0">
+                <button
+                  className="btn-secondary text-xs px-3 py-1.5"
+                  onClick={() => setPreviewId(previewId === r.id ? null : r.id)}
+                >
+                  {previewId === r.id ? "Hide preview" : "Preview / PDF"}
+                </button>
                 <button className="btn-secondary text-xs px-3 py-1.5" onClick={() => startEdit(r)}>
                   Edit
                 </button>
@@ -223,6 +238,22 @@ export default function ResumePage() {
                 </button>
               </div>
             </div>
+
+            {previewId === r.id && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium text-gray-500">
+                    A4 preview — auto-fit to one page
+                  </p>
+                  <button className="btn-primary text-xs px-2.5 py-1" onClick={() => downloadPdf(r)}>
+                    Download PDF
+                  </button>
+                </div>
+                <div className="max-h-[70vh] overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <ResumePreview lines={classifyLines(r.raw_text)} id={`resume-pdf-${r.id}`} fitToPage />
+                </div>
+              </div>
+            )}
           </div>
         ))}
 

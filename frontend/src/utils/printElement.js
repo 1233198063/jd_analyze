@@ -11,10 +11,10 @@ export function printElementAsPdf(elementId, filename) {
       body * { visibility: hidden !important; }
       #${elementId}, #${elementId} * { visibility: visible !important; }
       #${elementId} {
-        position: absolute; left: 0; top: 0; width: 100% !important;
-        box-shadow: none !important; border: none !important;
+        position: absolute; left: 0; top: 0; width: 210mm !important; height: 297mm !important;
+        box-shadow: none !important; border: none !important; overflow: hidden !important;
       }
-      @page { margin: 0.4in; }
+      @page { size: A4; margin: 0; }
     }
   `;
   document.head.appendChild(style);
