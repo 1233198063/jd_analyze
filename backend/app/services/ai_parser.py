@@ -163,6 +163,41 @@ Return JSON only:
 }}"""
 
 
+INTERVIEW_ANSWER_PROMPT = """You are coaching a candidate on how to answer one specific interview \
+question for one specific job. Speak as the candidate, in the first person ("I"), using only what's \
+genuinely true in their resume below — never invent companies, titles, metrics, or projects that \
+aren't already there.
+
+RESUME TEXT:
+{resume_text}
+
+JOB:
+Company: {company_name}
+Title: {title}
+Level: {level}
+Job summary: {job_summary}
+Key requirements: {key_requirements}
+
+INTERVIEW QUESTION:
+{question}
+
+Write the answer the candidate can say out loud or paste straight into an application.
+
+Requirements:
+- Plain, everyday spoken English — short sentences, no jargon, no corporate buzzwords, no clichés \
+like "team player" or "I am passionate about"
+- Concise: 80-150 words total, tight and to the point, no filler
+- Logically structured: answer the question directly first, then back it up with 1-2 concrete, real \
+details pulled from the resume, then (only if it naturally fits) a short line tying it back to this role
+- Ground every claim in the resume text — do not invent tools, numbers, or experience that isn't there
+- No headers, no bullet points, no markdown — just natural spoken paragraphs
+
+Return JSON only:
+{{
+  "answer": "the full answer text, paragraphs separated by \\n\\n if more than one"
+}}"""
+
+
 TAILOR_RESUME_PROMPT = """You are an expert technical resume writer and interview coach helping an \
 international student (OPT/STEM OPT/H-1B) tailor their resume for one specific job, without ever \
 misrepresenting their real experience.
@@ -374,5 +409,30 @@ def generate_cover_letter(
             key_requirements=", ".join(key_requirements[:8]) or "(none listed)",
         ),
         max_tokens=1024,
+    )
+    return json.loads(raw)
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+def generate_interview_answer(
+    resume_text: str,
+    company_name: str,
+    title: str,
+    level: str,
+    job_summary: str,
+    key_requirements: list[str],
+    question: str,
+) -> dict:
+    raw = _call(
+        INTERVIEW_ANSWER_PROMPT.format(
+            resume_text=resume_text[:8000],
+            company_name=company_name,
+            title=title,
+            level=level,
+            job_summary=job_summary or "(no summary available)",
+            key_requirements=", ".join(key_requirements[:8]) or "(none listed)",
+            question=question.strip()[:1000],
+        ),
+        max_tokens=512,
     )
     return json.loads(raw)

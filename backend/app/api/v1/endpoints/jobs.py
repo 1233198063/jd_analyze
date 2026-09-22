@@ -6,7 +6,12 @@ from uuid import UUID
 
 from app.core.database import get_db, AsyncSessionLocal
 from app.schemas.job import JobCreate, JobDetailOut, JobListItem, JobOut, ResumeMatchScoreOut, ResumeTailoringOut
-from app.schemas.resume import ReferralMessageOut, CoverLetterOut
+from app.schemas.resume import (
+    ReferralMessageOut,
+    CoverLetterOut,
+    InterviewAnswerRequest,
+    InterviewAnswerOut,
+)
 from app.services import job_service, ai_parser
 from app.services.skills import normalize_skill_terms
 from app.models.job import Job, ResumeTailoring
@@ -328,3 +333,38 @@ async def get_cover_letter(job_id: UUID, db: AsyncSession = Depends(get_db)):
         body=letter_data.get("body", ""),
         sign_off=letter_data.get("sign_off", "Sincerely,"),
     )
+
+
+@router.post("/{job_id}/interview-answer", response_model=InterviewAnswerOut)
+async def get_interview_answer(
+    job_id: UUID, payload: InterviewAnswerRequest, db: AsyncSession = Depends(get_db)
+):
+    """Generate a resume-grounded, plain-English answer to a specific interview question for this job."""
+    if not payload.question.strip():
+        raise HTTPException(status_code=422, detail="Question is required")
+
+    job = await job_service.get_job_detail(db, job_id)
+    if not job or not job.analysis:
+        raise HTTPException(status_code=404, detail="Job or analysis not found")
+
+    analysis = job.analysis
+    resume = await job_service._get_master_resume(db)
+    if not resume:
+        raise HTTPException(status_code=400, detail="No master resume set — add one on the Resume page first")
+
+    key_requirements = (analysis.required_skills or []) + (analysis.tech_stack or [])
+
+    try:
+        result = ai_parser.generate_interview_answer(
+            resume_text=resume.raw_text,
+            company_name=analysis.company_name or "the company",
+            title=analysis.title or "Software Engineer",
+            level=analysis.level.value,
+            job_summary=analysis.summary or "",
+            key_requirements=key_requirements,
+            question=payload.question,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+
+    return InterviewAnswerOut(job_id=job_id, question=payload.question, answer=result.get("answer", ""))

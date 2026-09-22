@@ -6,6 +6,7 @@ import { applicationsApi } from "@/api/applications";
 import { PageLoader } from "@/components/common/Loading";
 import ScoreRing, { ScoreBar } from "@/components/features/ScoreRing";
 import ResumeTailorPanel from "@/components/features/ResumeTailorPanel";
+import InterviewAnswerPanel from "@/components/features/InterviewAnswerPanel";
 import ApplicationTimeline from "@/components/features/ApplicationTimeline";
 import Badge, { SponsorBadge, LevelBadge, RecommendationBadge, RegionBadge } from "@/components/common/Badge";
 import clsx from "clsx";
@@ -327,6 +328,9 @@ export default function JobDetail() {
 
       {/* Tailor resume */}
       {!rejected && analysis && <ResumeTailorPanel jobId={jobId} jobTitle={analysis?.title} />}
+
+      {/* Practice interview answers */}
+      {!rejected && analysis && <InterviewAnswerPanel jobId={jobId} />}
 
       {/* Red flags */}
       {analysis && (

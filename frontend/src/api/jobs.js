@@ -8,6 +8,8 @@ export const jobsApi = {
   rescoreAll: () => client.post("/jobs/rescore-all").then((r) => r.data),
   getReferral: (id) => client.get(`/jobs/${id}/referral`).then((r) => r.data),
   getCoverLetter: (id) => client.get(`/jobs/${id}/cover-letter`).then((r) => r.data),
+  getInterviewAnswer: (id, question) =>
+    client.post(`/jobs/${id}/interview-answer`, { question }).then((r) => r.data),
   tailorResume: (id) => client.post(`/jobs/${id}/tailor-resume`).then((r) => r.data),
   getTailoredResume: (id) => client.get(`/jobs/${id}/tailor-resume`).then((r) => r.data),
   // Streams raw text chunks from the tailor-resume protocol (===RESUME===...===META===...===END===).
