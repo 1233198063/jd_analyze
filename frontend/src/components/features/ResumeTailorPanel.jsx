@@ -245,7 +245,7 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
 
             {viewMode === "clean" && !isStreaming && data && (
               <div className="max-h-[32rem] overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-3">
-                <ResumePreview lines={cleanLines} id="resume-pdf-target" />
+                <ResumePreview lines={cleanLines} id="resume-pdf-target" fitToPage />
               </div>
             )}
 
@@ -271,7 +271,7 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
                 <div>
                   <p className="text-xs font-medium text-gray-500 mb-1">Live preview</p>
                   <div className="max-h-[32rem] overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-3">
-                    <ResumePreview lines={editLines} id="resume-pdf-target" />
+                    <ResumePreview lines={editLines} id="resume-pdf-target" fitToPage />
                   </div>
                 </div>
               </div>
