@@ -45,3 +45,13 @@ class CoverLetterOut(BaseModel):
     greeting: str
     body: str
     sign_off: str
+
+
+class InterviewAnswerRequest(BaseModel):
+    question: str
+
+
+class InterviewAnswerOut(BaseModel):
+    job_id: UUID
+    question: str
+    answer: str

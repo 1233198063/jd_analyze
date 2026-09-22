@@ -18,9 +18,14 @@ An AI-powered job search tool built for international students on OPT/STEM OPT n
   | Product direction fit | 10 |
 
 - **Hard Reject Filters** — Auto-rejects roles with "not eligible for immigration sponsorship", 4+ years required, senior/staff/lead/principal titles, or security clearance requirements.
-- **Resume Match** — Upload your master resume. AI identifies missing keywords, evidence gaps, and generates tailored resume bullet points for each role.
+- **Resume Match & Gap Analysis** — Upload your master resume. AI identifies missing keywords and evidence gaps per job, then the Resume Gaps page aggregates gaps across your whole job history (or just the roles you applied to) so you know what to learn first — with a lightweight reading-list tracker (want to read / reading / finished + notes) per skill.
+- **AI Resume Tailoring** — Rewrites your master resume for one specific JD without inventing experience: side-by-side diff, clean, and editable views; keyword coverage tracking; honest suggestions for folding a missing skill into an existing project (with an honesty note on what you must be able to speak to); interview trade-off talking points for notable tech choices; and a separate learning-gap list for anything that can't be honestly claimed. Exports to a one-page A4 PDF (auto-shrinks to fit).
+- **AI Cover Letter Drafts** — Generates a resume-grounded cover letter draft per job, ready to copy.
+- **Practice Interview Answers** — Paste a question you might get asked for a specific role and get back a concise, plain-English answer grounded in your actual resume, ready to copy.
+- **Job Discovery** — Polls seeded companies' Greenhouse / Lever / Ashby job boards for postings matching your target roles, scores and dedupes them automatically. Can run on a daily schedule (see `backend/DISCOVERY.md`).
 - **Application Tracker** — Kanban board tracking every application through: Saved → Applied → OA → Phone Screen → Interview → Offer / Rejected. Records rejection reasons (sponsorship / level / resume / no response) to identify patterns over time.
 - **Referral Helper** — For high-score roles, generates a short LinkedIn cold message targeting alumni or employees for a referral.
+- **Dashboard & Company Profiles** — Quick overview of your top-scoring recent matches, plus a per-company profile showing H-1B filing history imported from DOL data.
 
 ## Tech Stack
 
@@ -140,7 +145,10 @@ The system normalizes company names, computes approval rates, and identifies SWE
 | `OPENAI_API_KEY` | OpenAI API key (GPT-4o) |
 | `REDIS_URL` | Redis URL (only needed if running Celery worker) |
 | `SECRET_KEY` | JWT signing secret |
+| `ALGORITHM` | JWT signing algorithm (default `HS256`) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT access token lifetime, in minutes |
 | `CORS_ORIGINS` | JSON array of allowed frontend origins |
+| `H1B_DATA_DIR` | Directory for downloaded DOL/USCIS H-1B CSV files |
 
 ## License
 
