@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { jobsApi } from "@/api/jobs";
 import { resumeApi } from "@/api/resume";
 import Badge from "@/components/common/Badge";
+import Icon from "@/components/common/Icon";
 import ResumePreview from "./ResumePreview";
 import {
   classifyLines,
@@ -17,10 +18,10 @@ import clsx from "clsx";
 
 function Sub({ title, count, children }) {
   return (
-    <div className="border-t border-gray-100 pt-4 mt-4 first:border-t-0 first:pt-0 first:mt-0">
-      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+    <div className="border-t border-mist/60 pt-4 mt-4 first:border-t-0 first:pt-0 first:mt-0">
+      <h4 className="text-xs font-semibold text-ink/55 uppercase tracking-wide mb-2">
         {title}
-        {count != null && <span className="text-gray-400 font-normal normal-case"> ({count})</span>}
+        {count != null && <span className="text-ink/40 font-normal normal-case"> ({count})</span>}
       </h4>
       {children}
     </div>
@@ -144,8 +145,8 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
     <div className="card p-5">
       <div className="flex items-center justify-between mb-1">
         <div>
-          <h3 className="text-sm font-semibold text-gray-700">Tailor My Resume</h3>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <h3 className="text-sm font-semibold text-ink/80">Tailor My Resume</h3>
+          <p className="text-xs text-ink/40 mt-0.5">
             Rewrites your master resume to fit this JD's keywords — never invents experience you
             don't have.
           </p>
@@ -159,19 +160,19 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
         </button>
       </div>
 
-      {streamError && <p className="text-xs text-red-600 mt-2">{streamError}</p>}
+      {streamError && <p className="text-xs text-coral-600 mt-2">{streamError}</p>}
 
       {isStreaming && (
-        <p className="text-xs text-gray-400 mt-3">
+        <p className="text-xs text-ink/40 mt-3">
           Streaming live from the AI — the preview below fills in as it writes...
         </p>
       )}
 
       {hasResult && (
         <div className="mt-4 space-y-0">
-          <div className="border-t border-gray-100 pt-4 first:border-t-0 first:pt-0">
+          <div className="border-t border-mist/60 pt-4 first:border-t-0 first:pt-0">
             <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-              <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+              <div className="flex gap-1 p-1 bg-petrol-50 rounded-lg">
                 {VIEW_MODES.map((m) => (
                   <button
                     key={m.key}
@@ -180,8 +181,8 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
                     className={clsx(
                       "px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
                       viewMode === m.key
-                        ? "bg-white shadow text-gray-900"
-                        : "text-gray-500 hover:text-gray-800",
+                        ? "bg-white shadow text-ink"
+                        : "text-ink/55 hover:text-ink/90",
                       isStreaming && m.key !== "diff" && "opacity-40 cursor-not-allowed"
                     )}
                   >
@@ -211,31 +212,31 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
 
             {viewMode === "diff" && (
               <>
-                <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
+                <div className="flex items-center gap-3 text-xs text-ink/55 mb-2">
                   <span className="inline-flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-sm bg-green-100 border border-green-300" />
+                    <span className="w-2.5 h-2.5 rounded-sm bg-sage-100 border border-sage-300" />
                     added (right, tailored)
                   </span>
                   <span className="inline-flex items-center gap-1">
-                    <span className="w-2.5 h-2.5 rounded-sm bg-red-50 border border-red-200" />
+                    <span className="w-2.5 h-2.5 rounded-sm bg-coral-50 border border-coral-200" />
                     cut (left, original)
                   </span>
                   {!masterResume?.raw_text && (
-                    <span className="text-amber-600">No master resume to diff against.</span>
+                    <span className="text-gold-600">No master resume to diff against.</span>
                   )}
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                   <div>
-                    <p className="text-xs font-medium text-gray-500 mb-1">Original</p>
-                    <div className="max-h-[32rem] overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <p className="text-xs font-medium text-ink/55 mb-1">Original</p>
+                    <div className="max-h-[32rem] overflow-y-auto bg-canvas border border-mist rounded-lg p-3">
                       <ResumePreview lines={diffOldLines} className="shadow-none" />
                     </div>
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-gray-500 mb-1">
+                    <p className="text-xs font-medium text-ink/55 mb-1">
                       Tailored{isStreaming && " (writing live...)"}
                     </p>
-                    <div className="max-h-[32rem] overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div className="max-h-[32rem] overflow-y-auto bg-canvas border border-mist rounded-lg p-3">
                       <ResumePreview lines={diffNewLines} className="shadow-none" />
                     </div>
                   </div>
@@ -244,7 +245,7 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
             )}
 
             {viewMode === "clean" && !isStreaming && data && (
-              <div className="max-h-[32rem] overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <div className="max-h-[32rem] overflow-y-auto bg-canvas border border-mist rounded-lg p-3">
                 <ResumePreview lines={cleanLines} id="resume-pdf-target" fitToPage />
               </div>
             )}
@@ -253,9 +254,9 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <p className="text-xs font-medium text-gray-500">Edit</p>
+                    <p className="text-xs font-medium text-ink/55">Edit</p>
                     <button
-                      className="text-xs text-blue-600 hover:underline"
+                      className="text-xs text-petrol-500 hover:underline"
                       onClick={() => setEditedText(data.tailored_text || "")}
                     >
                       Reset to AI version
@@ -269,8 +270,8 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
                   />
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1">Live preview</p>
-                  <div className="max-h-[32rem] overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <p className="text-xs font-medium text-ink/55 mb-1">Live preview</p>
+                  <div className="max-h-[32rem] overflow-y-auto bg-canvas border border-mist rounded-lg p-3">
                     <ResumePreview lines={editLines} id="resume-pdf-target" fitToPage />
                   </div>
                 </div>
@@ -282,15 +283,16 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
             <Sub title="What changed and why" count={data.change_notes.length}>
               <div className="space-y-2">
                 {data.change_notes.map((c, i) => (
-                  <div key={i} className="rounded-lg border border-gray-200 p-3 text-xs space-y-1">
-                    <p className="text-gray-900">{c.change}</p>
-                    <p className="text-gray-500">
-                      <span className="font-medium text-gray-400">Why: </span>
+                  <div key={i} className="rounded-lg border border-mist p-3 text-xs space-y-1">
+                    <p className="text-ink">{c.change}</p>
+                    <p className="text-ink/55">
+                      <span className="font-medium text-ink/40">Why: </span>
                       {c.reason}
                     </p>
                     {c.fills_gap && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">
-                        ✓ Fills gap: {c.fills_gap}
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sage-100 text-sage-700 font-medium">
+                        <Icon name="check_circle" size={13} />
+                        Fills gap: {c.fills_gap}
                       </span>
                     )}
                   </div>
@@ -309,8 +311,8 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
                     className={clsx(
                       "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",
                       k.in_tailored_resume
-                        ? "bg-green-100 text-green-700"
-                        : "bg-gray-100 text-gray-500 line-through"
+                        ? "bg-sage-100 text-sage-700"
+                        : "bg-petrol-50 text-ink/55 line-through"
                     )}
                   >
                     {k.keyword}
@@ -327,21 +329,25 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
             >
               <div className="space-y-3">
                 {data.integration_suggestions.map((s, i) => (
-                  <div key={i} className="rounded-lg border border-blue-200 bg-blue-50/40 p-3 text-xs space-y-1.5">
-                    <p className="font-semibold text-blue-900">{s.skill}</p>
-                    <p className="text-gray-600">
-                      <span className="text-gray-400">Attach to: </span>
+                  <div key={i} className="rounded-lg border border-bubblegum-200 bg-bubblegum-100/40 p-3 text-xs space-y-1.5">
+                    <p className="font-semibold text-ink inline-flex items-center gap-1">
+                      <Icon name="auto_awesome" size={14} className="text-bubblegum-600" />
+                      {s.skill}
+                    </p>
+                    <p className="text-ink/70">
+                      <span className="text-ink/40">Attach to: </span>
                       <span className="italic">"{s.target_bullet}"</span>
                     </p>
-                    <p className="text-gray-800 font-mono bg-white px-2 py-1 rounded border border-blue-100">
+                    <p className="text-ink/90 font-mono bg-white px-2 py-1 rounded border border-bubblegum-200">
                       {s.suggested_addition}
                     </p>
-                    <p className="text-gray-600">
-                      <span className="font-medium text-gray-500">How to explain it: </span>
+                    <p className="text-ink/70">
+                      <span className="font-medium text-ink/55">How to explain it: </span>
                       {s.how_to_explain}
                     </p>
-                    <p className="text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                      ⚠ {s.honesty_note}
+                    <p className="text-gold-700 bg-gold-50 border border-gold-200 rounded px-2 py-1 flex items-start gap-1">
+                      <Icon name="warning" size={14} className="flex-shrink-0 mt-0.5" />
+                      {s.honesty_note}
                     </p>
                   </div>
                 ))}
@@ -353,22 +359,22 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
             <Sub title="Trade-off talking points" count={data.trade_off_notes.length}>
               <div className="space-y-3">
                 {data.trade_off_notes.map((t, i) => (
-                  <div key={i} className="rounded-lg border border-gray-200 p-3 text-xs space-y-1.5">
-                    <p className="font-semibold text-gray-900">{t.topic}</p>
-                    <p className="text-gray-700">{t.why_this_choice}</p>
+                  <div key={i} className="rounded-lg border border-mist p-3 text-xs space-y-1.5">
+                    <p className="font-semibold text-ink">{t.topic}</p>
+                    <p className="text-ink/80">{t.why_this_choice}</p>
                     {t.alternatives_considered?.length > 0 && (
                       <div className="flex flex-wrap gap-1 items-center">
-                        <span className="text-gray-400">vs.</span>
+                        <span className="text-ink/40">vs.</span>
                         {t.alternatives_considered.map((alt) => (
-                          <span key={alt} className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                          <span key={alt} className="bg-petrol-50 text-ink/70 px-1.5 py-0.5 rounded">
                             {alt}
                           </span>
                         ))}
                       </div>
                     )}
-                    <p className="text-gray-600">{t.why_not_alternatives}</p>
-                    <p className="text-gray-800 bg-gray-50 border border-gray-200 rounded px-2 py-1">
-                      <span className="font-medium text-gray-500">Say: </span>
+                    <p className="text-ink/70">{t.why_not_alternatives}</p>
+                    <p className="text-ink/90 bg-canvas border border-mist rounded px-2 py-1">
+                      <span className="font-medium text-ink/55">Say: </span>
                       {t.how_to_explain}
                     </p>
                   </div>
@@ -381,14 +387,14 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
             <Sub title="Skills to actually go learn" count={data.learning_gaps.length}>
               <div className="space-y-2">
                 {data.learning_gaps.map((g, i) => (
-                  <div key={i} className="rounded-lg border border-gray-200 p-3 text-xs space-y-1">
+                  <div key={i} className="rounded-lg border border-mist p-3 text-xs space-y-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-gray-900">{g.skill}</p>
+                      <p className="font-semibold text-ink">{g.skill}</p>
                       <PriorityBadge priority={g.priority} />
                     </div>
-                    <p className="text-gray-600">{g.why_it_matters}</p>
-                    <p className="text-gray-800">
-                      <span className="font-medium text-gray-500">Start here: </span>
+                    <p className="text-ink/70">{g.why_it_matters}</p>
+                    <p className="text-ink/90">
+                      <span className="font-medium text-ink/55">Start here: </span>
                       {g.how_to_learn}
                     </p>
                   </div>
@@ -400,7 +406,7 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
       )}
 
       {!hasResult && (
-        <p className="text-xs text-gray-400 mt-3">
+        <p className="text-xs text-ink/40 mt-3">
           Not generated yet for this job. Click Generate to get a tailored resume, missing-keyword
           coverage, honest ways to surface skills from your existing projects, interview trade-off
           talking points, and a list of what to go learn.

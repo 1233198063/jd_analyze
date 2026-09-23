@@ -8,13 +8,14 @@ import ScoreRing, { ScoreBar } from "@/components/features/ScoreRing";
 import ResumeTailorPanel from "@/components/features/ResumeTailorPanel";
 import InterviewAnswerPanel from "@/components/features/InterviewAnswerPanel";
 import ApplicationTimeline from "@/components/features/ApplicationTimeline";
+import Icon from "@/components/common/Icon";
 import Badge, { SponsorBadge, LevelBadge, RecommendationBadge, RegionBadge } from "@/components/common/Badge";
 import clsx from "clsx";
 
 function Section({ title, children }) {
   return (
     <div className="card p-5">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">{title}</h3>
+      <h3 className="text-sm font-semibold text-ink/80 mb-3">{title}</h3>
       {children}
     </div>
   );
@@ -25,7 +26,7 @@ function SkillTag({ skill, matched }) {
     <span
       className={clsx(
         "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",
-        matched ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+        matched ? "bg-sage-100 text-sage-700" : "bg-petrol-50 text-ink/70"
       )}
     >
       {skill}
@@ -94,7 +95,7 @@ export default function JobDetail() {
   });
 
   if (isLoading) return <PageLoader />;
-  if (error) return <div className="card p-6 text-red-600">{error.message}</div>;
+  if (error) return <div className="card p-6 text-coral-600">{error.message}</div>;
 
   const { job, analysis, match_score: ms } = data;
   const rejected = ms?.is_auto_rejected;
@@ -118,19 +119,20 @@ export default function JobDetail() {
       {/* Header */}
       <div className="flex items-start gap-4">
         <div className="flex-1">
-          <h1 className="text-xl font-bold text-gray-900">
+          <h1 className="text-xl font-bold text-ink">
             {analysis?.title || job.title || "Untitled Role"}
           </h1>
           <div className="flex items-center gap-2 mt-0.5">
-            <p className="text-gray-600">{analysis?.company_name || job.company_name || "—"}</p>
+            <p className="text-ink/70">{analysis?.company_name || job.company_name || "—"}</p>
             {job.url && (
               <a
                 href={job.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                className="inline-flex items-center gap-0.5 text-xs font-medium text-petrol-500 hover:text-petrol-600 hover:underline"
               >
-                View Original Posting ↗
+                View Original Posting
+                <Icon name="open_in_new" size={13} />
               </a>
             )}
           </div>
@@ -157,9 +159,9 @@ export default function JobDetail() {
 
       {/* Auto-reject alert */}
       {rejected && ms?.auto_reject_reasons && (
-        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3">
-          <p className="text-sm font-medium text-red-800 mb-1">Hard Rejected</p>
-          <ul className="text-sm text-red-700 space-y-0.5 list-disc list-inside">
+        <div className="rounded-lg bg-coral-50 border border-coral-200 px-4 py-3">
+          <p className="text-sm font-medium text-coral-700 mb-1">Hard Rejected</p>
+          <ul className="text-sm text-coral-700 space-y-0.5 list-disc list-inside">
             {ms.auto_reject_reasons.map((r, i) => <li key={i}>{r}</li>)}
           </ul>
         </div>
@@ -177,7 +179,7 @@ export default function JobDetail() {
             <ScoreBar label="Product Fit" value={ms.score_product} max={10} color="pink" />
           </div>
           {ms.recommendation_reason && (
-            <p className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
+            <p className="text-xs text-ink/55 mt-3 pt-3 border-t border-mist/60">
               {ms.recommendation_reason}
             </p>
           )}
@@ -191,22 +193,22 @@ export default function JobDetail() {
             <dl className="space-y-2 text-sm">
               {analysis.location && (
                 <div className="flex gap-2">
-                  <dt className="text-gray-500 w-24 flex-shrink-0">Location</dt>
-                  <dd className="text-gray-900">{analysis.location}</dd>
+                  <dt className="text-ink/55 w-24 flex-shrink-0">Location</dt>
+                  <dd className="text-ink">{analysis.location}</dd>
                 </div>
               )}
               {(analysis.years_min != null || analysis.years_max != null) && (
                 <div className="flex gap-2">
-                  <dt className="text-gray-500 w-24 flex-shrink-0">Experience</dt>
-                  <dd className="text-gray-900">
+                  <dt className="text-ink/55 w-24 flex-shrink-0">Experience</dt>
+                  <dd className="text-ink">
                     {analysis.years_min ?? 0}–{analysis.years_max ?? "∞"} years
                   </dd>
                 </div>
               )}
               {(analysis.salary_min || analysis.salary_max) && (
                 <div className="flex gap-2">
-                  <dt className="text-gray-500 w-24 flex-shrink-0">Salary</dt>
-                  <dd className="text-gray-900">
+                  <dt className="text-ink/55 w-24 flex-shrink-0">Salary</dt>
+                  <dd className="text-ink">
                     ${(analysis.salary_min ?? 0).toLocaleString()} –{" "}
                     ${(analysis.salary_max ?? 0).toLocaleString()}
                   </dd>
@@ -214,8 +216,8 @@ export default function JobDetail() {
               )}
               {analysis.degree_required && (
                 <div className="flex gap-2">
-                  <dt className="text-gray-500 w-24 flex-shrink-0">Degree</dt>
-                  <dd className="text-gray-900">
+                  <dt className="text-ink/55 w-24 flex-shrink-0">Degree</dt>
+                  <dd className="text-ink">
                     {analysis.degree_level || "Required"}
                     {analysis.degree_preferred && !analysis.degree_required ? " (preferred)" : ""}
                   </dd>
@@ -224,7 +226,7 @@ export default function JobDetail() {
             </dl>
 
             {analysis.sponsorship_raw_text && (
-              <div className="mt-3 p-3 bg-gray-50 rounded-lg text-xs text-gray-600 italic border border-gray-200">
+              <div className="mt-3 p-3 bg-canvas rounded-lg text-xs text-ink/70 italic border border-mist">
                 "{analysis.sponsorship_raw_text}"
               </div>
             )}
@@ -237,7 +239,7 @@ export default function JobDetail() {
             <div className="space-y-3">
               {analysis.required_skills.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1.5">Required</p>
+                  <p className="text-xs font-medium text-ink/55 mb-1.5">Required</p>
                   <div className="flex flex-wrap gap-1.5">
                     {analysis.required_skills.map((s) => (
                       <SkillTag
@@ -251,10 +253,10 @@ export default function JobDetail() {
               )}
               {analysis.nice_to_have_skills.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1.5">Nice to have</p>
+                  <p className="text-xs font-medium text-ink/55 mb-1.5">Nice to have</p>
                   <div className="flex flex-wrap gap-1.5">
                     {analysis.nice_to_have_skills.map((s) => (
-                      <span key={s} className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-600">
+                      <span key={s} className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-petrol-50 text-petrol-500">
                         {s}
                       </span>
                     ))}
@@ -263,10 +265,10 @@ export default function JobDetail() {
               )}
               {analysis.tech_stack.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1.5">Tech stack</p>
+                  <p className="text-xs font-medium text-ink/55 mb-1.5">Tech stack</p>
                   <div className="flex flex-wrap gap-1.5">
                     {analysis.tech_stack.map((s) => (
-                      <span key={s} className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-50 text-gray-600">
+                      <span key={s} className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-canvas text-ink/70">
                         {s}
                       </span>
                     ))}
@@ -282,10 +284,10 @@ export default function JobDetail() {
           <Section title="Resume Gaps">
             {ms.missing_keywords.length > 0 && (
               <div className="mb-3">
-                <p className="text-xs font-medium text-red-600 mb-1.5">Missing keywords</p>
+                <p className="text-xs font-medium text-coral-600 mb-1.5">Missing keywords</p>
                 <div className="flex flex-wrap gap-1.5">
                   {ms.missing_keywords.map((k) => (
-                    <span key={k} className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-red-50 text-red-600">
+                    <span key={k} className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-coral-50 text-coral-600">
                       {k}
                     </span>
                   ))}
@@ -294,17 +296,17 @@ export default function JobDetail() {
             )}
             {ms.missing_evidence.length > 0 && (
               <div className="space-y-2">
-                <p className="text-xs font-medium text-gray-500">Evidence gaps</p>
+                <p className="text-xs font-medium text-ink/55">Evidence gaps</p>
                 {ms.missing_evidence.map((e, i) => (
                   <div key={i} className="text-xs">
-                    <p className="font-medium text-gray-700">{e.requirement}</p>
-                    <p className="text-gray-500">{e.gap}</p>
+                    <p className="font-medium text-ink/80">{e.requirement}</p>
+                    <p className="text-ink/55">{e.gap}</p>
                   </div>
                 ))}
               </div>
             )}
             {ms.missing_keywords.length === 0 && ms.missing_evidence.length === 0 && (
-              <p className="text-sm text-green-600">Strong resume match — no major gaps found.</p>
+              <p className="text-sm text-sage-600">Strong resume match — no major gaps found.</p>
             )}
           </Section>
         )}
@@ -315,8 +317,8 @@ export default function JobDetail() {
             <div className="space-y-2">
               {ms.recommended_bullets.map((b, i) => (
                 <div key={i} className="text-xs">
-                  <p className="text-gray-400 mb-0.5">for: {b.for_skill}</p>
-                  <p className="text-gray-800 font-mono bg-gray-50 px-2 py-1.5 rounded border border-gray-200">
+                  <p className="text-ink/40 mb-0.5">for: {b.for_skill}</p>
+                  <p className="text-ink/90 font-mono bg-canvas px-2 py-1.5 rounded border border-mist">
                     {b.bullet}
                   </p>
                 </div>
@@ -342,18 +344,18 @@ export default function JobDetail() {
                   <span
                     className={clsx(
                       "flex-shrink-0 w-2 h-2 rounded-full mt-1.5",
-                      flag.severity === "high" ? "bg-red-500" : flag.severity === "medium" ? "bg-yellow-500" : "bg-gray-400"
+                      flag.severity === "high" ? "bg-coral-500" : flag.severity === "medium" ? "bg-gold-500" : "bg-petrol-300"
                     )}
                   />
                   <div>
-                    <span className="text-gray-700">{flag.flag}</span>
-                    <span className="ml-2 text-xs text-gray-400">({flag.category})</span>
+                    <span className="text-ink/80">{flag.flag}</span>
+                    <span className="ml-2 text-xs text-ink/40">({flag.category})</span>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-400">No red flags detected in this JD.</p>
+            <p className="text-sm text-ink/40">No red flags detected in this JD.</p>
           )}
         </Section>
       )}
@@ -361,7 +363,7 @@ export default function JobDetail() {
       {/* AI summary */}
       {analysis?.summary && (
         <Section title="Role Summary">
-          <p className="text-sm text-gray-700 leading-relaxed">{analysis.summary}</p>
+          <p className="text-sm text-ink/80 leading-relaxed">{analysis.summary}</p>
         </Section>
       )}
 
@@ -411,7 +413,7 @@ export default function JobDetail() {
 
       {/* Application link */}
       <div className="card p-4">
-        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+        <label className="text-xs font-semibold text-ink/55 uppercase tracking-wide">
           Application Link
         </label>
         <div className="flex gap-2 mt-2">
@@ -434,9 +436,10 @@ export default function JobDetail() {
               href={job.apply_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="btn-secondary whitespace-nowrap"
+              className="btn-secondary whitespace-nowrap inline-flex items-center gap-1"
             >
-              Open ↗
+              Open
+              <Icon name="open_in_new" size={14} />
             </a>
           )}
         </div>
@@ -444,36 +447,36 @@ export default function JobDetail() {
 
       {/* Referral message modal */}
       {referralOpen && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-ink/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">LinkedIn Referral Message</h3>
+              <h3 className="font-semibold text-ink">LinkedIn Referral Message</h3>
               <button
                 onClick={() => setReferralOpen(false)}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                className="text-ink/40 hover:text-ink/70"
               >
-                ×
+                <Icon name="close" size={20} />
               </button>
             </div>
 
             {referralLoading ? (
-              <div className="py-8 text-center text-sm text-gray-500">Generating...</div>
+              <div className="py-8 text-center text-sm text-ink/55">Generating...</div>
             ) : referral ? (
               <div className="space-y-4">
                 <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1">Subject / Connection Note</p>
-                  <p className="text-sm font-medium text-gray-800">{referral.subject_line}</p>
+                  <p className="text-xs font-medium text-ink/55 mb-1">Subject / Connection Note</p>
+                  <p className="text-sm font-medium text-ink/90">{referral.subject_line}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-gray-500 mb-1">Message</p>
-                  <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-800 whitespace-pre-wrap font-mono border border-gray-200">
+                  <p className="text-xs font-medium text-ink/55 mb-1">Message</p>
+                  <div className="bg-canvas rounded-lg p-3 text-sm text-ink/90 whitespace-pre-wrap font-mono border border-mist">
                     {referral.message}
                   </div>
                 </div>
                 {referral.tips?.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium text-gray-500 mb-1">Tips</p>
-                    <ul className="text-xs text-gray-600 space-y-0.5 list-disc list-inside">
+                    <p className="text-xs font-medium text-ink/55 mb-1">Tips</p>
+                    <ul className="text-xs text-ink/70 space-y-0.5 list-disc list-inside">
                       {referral.tips.map((t, i) => <li key={i}>{t}</li>)}
                     </ul>
                   </div>
@@ -492,32 +495,32 @@ export default function JobDetail() {
 
       {/* Cover letter modal */}
       {coverLetterOpen && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-ink/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">Cover Letter Draft</h3>
+              <h3 className="font-semibold text-ink">Cover Letter Draft</h3>
               <button
                 onClick={() => setCoverLetterOpen(false)}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                className="text-ink/40 hover:text-ink/70"
               >
-                ×
+                <Icon name="close" size={20} />
               </button>
             </div>
 
             {coverLetterLoading ? (
-              <div className="py-8 text-center text-sm text-gray-500">Generating...</div>
+              <div className="py-8 text-center text-sm text-ink/55">Generating...</div>
             ) : coverLetterError ? (
-              <p className="text-sm text-red-600">{coverLetterError.message}</p>
+              <p className="text-sm text-coral-600">{coverLetterError.message}</p>
             ) : coverLetter ? (
               <div className="space-y-4">
-                <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-800 whitespace-pre-wrap border border-gray-200 max-h-96 overflow-y-auto">
+                <div className="bg-canvas rounded-lg p-3 text-sm text-ink/90 whitespace-pre-wrap border border-mist max-h-96 overflow-y-auto">
                   {coverLetter.greeting}
                   {"\n\n"}
                   {coverLetter.body}
                   {"\n\n"}
                   {coverLetter.sign_off}
                 </div>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-ink/40">
                   A first draft, grounded in your master resume — review before sending, and adjust the
                   opening to sound like you.
                 </p>

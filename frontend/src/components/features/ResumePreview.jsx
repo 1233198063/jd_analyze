@@ -7,10 +7,10 @@ function stripLeadingBulletChar(text) {
 
 function Segment({ segment }) {
   if (segment.type === "removed") {
-    return <del className="bg-red-50 text-red-500 decoration-red-300">{segment.value}</del>;
+    return <del className="bg-coral-50 text-coral-600 decoration-coral-300">{segment.value}</del>;
   }
   if (segment.type === "added") {
-    return <mark className="bg-green-100 text-green-900 rounded-sm px-0.5 -mx-0.5">{segment.value}</mark>;
+    return <mark className="bg-sage-100 text-sage-700 rounded-sm px-0.5 -mx-0.5">{segment.value}</mark>;
   }
   return <>{segment.value}</>;
 }

@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { applicationsApi } from "@/api/applications";
 import { PageLoader } from "@/components/common/Loading";
-import Stamp, { stampLabel } from "@/components/features/Stamp";
+import Stamp, { STAMPS, stampLabel } from "@/components/features/Stamp";
+import Icon from "@/components/common/Icon";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import clsx from "clsx";
@@ -12,15 +13,15 @@ dayjs.extend(relativeTime);
 // Low-saturation blocks carry stage identity on the list, so the rows themselves
 // can stay plain text. Stamps live on the JobDetail timeline, not on this surface.
 const STAGE_TINT = {
-  saved: { bar: "bg-slate-300", tint: "bg-slate-50", dot: "bg-slate-400" },
-  applied: { bar: "bg-blue-300", tint: "bg-blue-50/50", dot: "bg-blue-400" },
-  referral_asked: { bar: "bg-purple-300", tint: "bg-purple-50/50", dot: "bg-purple-400" },
-  oa: { bar: "bg-amber-300", tint: "bg-amber-50/50", dot: "bg-amber-400" },
-  phone_screen: { bar: "bg-amber-300", tint: "bg-amber-50/50", dot: "bg-amber-400" },
-  interview: { bar: "bg-orange-300", tint: "bg-orange-50/50", dot: "bg-orange-400" },
-  offer: { bar: "bg-emerald-300", tint: "bg-emerald-50/50", dot: "bg-emerald-400" },
-  rejected: { bar: "bg-rose-200", tint: "bg-rose-50/40", dot: "bg-rose-300" },
-  withdrawn: { bar: "bg-gray-200", tint: "bg-gray-50", dot: "bg-gray-300" },
+  saved: { bar: "bg-petrol-200", tint: "bg-canvas", dot: "bg-petrol-300" },
+  applied: { bar: "bg-petrol-300", tint: "bg-petrol-50/50", dot: "bg-petrol-400" },
+  referral_asked: { bar: "bg-plum-300", tint: "bg-plum-50/50", dot: "bg-plum-400" },
+  oa: { bar: "bg-gold-300", tint: "bg-gold-50/50", dot: "bg-gold-400" },
+  phone_screen: { bar: "bg-gold-300", tint: "bg-gold-50/50", dot: "bg-gold-400" },
+  interview: { bar: "bg-clay-300", tint: "bg-clay-50/50", dot: "bg-clay-400" },
+  offer: { bar: "bg-sage-300", tint: "bg-sage-50/50", dot: "bg-sage-400" },
+  rejected: { bar: "bg-coral-200", tint: "bg-coral-50/40", dot: "bg-coral-300" },
+  withdrawn: { bar: "bg-mist", tint: "bg-canvas", dot: "bg-petrol-200" },
 };
 
 const tint = (status) => STAGE_TINT[status] || STAGE_TINT.saved;
@@ -65,12 +66,12 @@ function daysSince(date) {
 function TimelineTrail({ timeline = [] }) {
   if (timeline.length === 0) return null;
   return (
-    <div className="flex items-center gap-1 flex-wrap text-xs text-gray-400">
+    <div className="flex items-center gap-1 flex-wrap text-xs text-ink/40">
       {timeline.map((e, i) => (
         <span key={`${e.status}-${e.timestamp}-${i}`} className="flex items-center gap-1">
-          {i > 0 && <span className="text-gray-300">→</span>}
+          {i > 0 && <Icon name="arrow_forward" size={12} className="text-ink/25" />}
           <span>
-            <span className="text-gray-500">{SHORT_LABEL[e.status] || e.status}</span>{" "}
+            <span className="text-ink/55">{SHORT_LABEL[e.status] || e.status}</span>{" "}
             {e.timestamp ? dayjs(e.timestamp).format("MMM D") : "—"}
           </span>
         </span>
@@ -79,7 +80,9 @@ function TimelineTrail({ timeline = [] }) {
   );
 }
 
-/** This month's collected stamps, kept to one quiet line above the list. */
+const STAMP_TOOLTIP_LIMIT = 10;
+
+/** This month's collected stamps, one labeled tile per stage in pipeline order. */
 function StampCollection({ kanban }) {
   const startOfMonth = dayjs().startOf("month");
   const stamps = kanban
@@ -88,31 +91,108 @@ function StampCollection({ kanban }) {
       (item.timeline || []).map((e) => ({ ...e, company: item.company, title: item.title }))
     )
     .filter((e) => e.timestamp && dayjs(e.timestamp).isAfter(startOfMonth))
-    .sort((a, b) => dayjs(a.timestamp) - dayjs(b.timestamp));
+    .sort((a, b) => dayjs(b.timestamp) - dayjs(a.timestamp));
 
   if (stamps.length === 0) return null;
 
+  const groups = Object.keys(STAMPS)
+    .map((status) => ({ status, items: stamps.filter((e) => e.status === status) }))
+    .filter((g) => g.items.length > 0);
+
+  const tooltipFor = ({ status, items }) => {
+    const lines = items
+      .slice(0, STAMP_TOOLTIP_LIMIT)
+      .map((e) => `${dayjs(e.timestamp).format("MMM D")} · ${e.title || "Untitled"} — ${e.company || "?"}`);
+    if (items.length > STAMP_TOOLTIP_LIMIT) lines.push(`+${items.length - STAMP_TOOLTIP_LIMIT} more`);
+    return `${stampLabel(status)} (${items.length})\n${lines.join("\n")}`;
+  };
+
   return (
-    <div className="flex items-center gap-3 flex-wrap px-1">
-      <span className="text-xs text-gray-400 whitespace-nowrap">
-        Stamps this month · {stamps.length}
-      </span>
-      <div className="flex flex-wrap gap-1 opacity-75">
-        {stamps.map((e, i) => (
-          <Stamp
-            key={`${e.timestamp}-${i}`}
-            status={e.status}
-            size="sm"
-            seed={`${e.timestamp}-${i}`}
-            title={`${stampLabel(e.status)} · ${e.title || ""} ${e.company || ""} · ${dayjs(e.timestamp).format("MMM D")}`}
-          />
-        ))}
+    <div className="card px-4 py-3">
+      <div className="flex items-center justify-between mb-2.5">
+        <p className="text-xs font-medium text-ink/55">Stamps this month</p>
+        <span className="text-xs text-ink/40">{stamps.length} total · hover a stage to see the roles</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {groups.map((g) => {
+          const tooltip = tooltipFor(g);
+          return (
+            <div
+              key={g.status}
+              title={tooltip}
+              className="flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-lg bg-canvas border border-mist/60 cursor-default"
+            >
+              <Stamp status={g.status} size="sm" seed={g.status} title={tooltip} />
+              <span className="text-xs text-ink/70">{stampLabel(g.status)}</span>
+              <span className="text-xs font-semibold text-ink tabular-nums">{g.items.length}</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function AppRow({ item, colStatus }) {
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function Highlight({ text, terms }) {
+  if (!text || terms.length === 0) return text;
+  const parts = text.split(new RegExp(`(${terms.map(escapeRegExp).join("|")})`, "gi"));
+  // split() with a capturing group puts the matched pieces at the odd indices
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <mark key={i} className="bg-bubblegum-200 text-ink rounded-sm px-0.5 -mx-0.5">
+        {part}
+      </mark>
+    ) : (
+      part
+    )
+  );
+}
+
+function searchableText(item, stageLabel) {
+  const reason = REJECTION_REASONS.find((r) => r.value === item.rejection_reason)?.label;
+  const timelineNotes = (item.timeline || []).map((e) => e.note);
+  return [item.title, item.company, item.notes, stageLabel, reason, ...timelineNotes]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function SearchBox({ value, onChange }) {
+  return (
+    <div className="relative w-full sm:w-80">
+      <Icon
+        name="search"
+        size={18}
+        className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink/40 pointer-events-none"
+      />
+      <input
+        type="text"
+        className="input pl-9 pr-8"
+        placeholder="Search title, company, stage, notes…"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => e.key === "Escape" && onChange("")}
+        aria-label="Search applications"
+      />
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-ink/40 hover:text-ink transition-colors"
+          aria-label="Clear search"
+        >
+          <Icon name="close" size={16} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function AppRow({ item, colStatus, terms = [] }) {
   const qc = useQueryClient();
 
   const update = useMutation({
@@ -127,24 +207,27 @@ function AppRow({ item, colStatus }) {
   const stageDays = item.status_since != null ? daysSince(item.status_since) : null;
 
   return (
-    <div className="flex items-start gap-3 px-4 py-3 border-t border-gray-100 first:border-t-0 hover:bg-gray-50/60 transition-colors">
+    <div className="flex items-start gap-3 px-4 py-3 border-t border-mist/60 first:border-t-0 hover:bg-canvas/60 transition-colors">
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2 flex-wrap">
           <Link
             to={`/jobs/${item.job_id}`}
-            className="font-medium text-sm text-gray-900 hover:text-blue-600 hover:underline truncate"
+            className="font-medium text-sm text-ink hover:text-petrol-500 hover:underline truncate"
           >
-            {item.title || "Untitled"}
+            <Highlight text={item.title || "Untitled"} terms={terms} />
           </Link>
-          <span className="text-xs text-gray-500">{item.company}</span>
+          <span className="text-xs text-ink/55">
+            <Highlight text={item.company} terms={terms} />
+          </span>
           {item.apply_url && (
             <a
               href={item.apply_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-blue-600 hover:underline"
+              className="inline-flex items-center gap-0.5 text-xs text-petrol-500 hover:underline"
             >
-              Application Link ↗
+              Application Link
+              <Icon name="open_in_new" size={12} />
             </a>
           )}
         </div>
@@ -170,34 +253,35 @@ function AppRow({ item, colStatus }) {
       <div className="flex items-center gap-3 flex-shrink-0">
         <div className="text-right">
           {item.applied_at && (
-            <p className="text-xs text-gray-600 whitespace-nowrap">
+            <p className="text-xs text-ink/70 whitespace-nowrap">
               Applied {dayjs(item.applied_at).format("MMM D")}
             </p>
           )}
           {stageDays != null && (
-            <p className="text-xs text-gray-400 whitespace-nowrap">
+            <p className="text-xs text-ink/40 whitespace-nowrap">
               {stageDays === 0 ? "today" : `${stageDays}d in stage`}
             </p>
           )}
         </div>
 
-        <div className="flex gap-1.5">
-          {next && (
-            <button
-              className="text-xs px-2 py-1 rounded border border-gray-300 bg-white hover:bg-gray-50 whitespace-nowrap transition-colors"
-              disabled={update.isPending}
-              onClick={() => update.mutate({ id: item.id, payload: { status: next } })}
-            >
-              → {SHORT_LABEL[next]}
-            </button>
-          )}
+        <div className="flex items-center gap-1">
           {colStatus !== "rejected" && colStatus !== "withdrawn" && (
             <button
-              className="text-xs px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+              className="text-xs px-2 py-1 rounded text-ink/40 hover:text-coral-600 hover:bg-coral-50 whitespace-nowrap transition-colors disabled:opacity-50"
               disabled={update.isPending}
               onClick={() => update.mutate({ id: item.id, payload: { status: "rejected" } })}
             >
-              Reject
+              Mark rejected
+            </button>
+          )}
+          {next && (
+            <button
+              className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-md bg-petrol-500 text-white hover:bg-bubblegum-500 whitespace-nowrap transition-colors disabled:opacity-50"
+              disabled={update.isPending}
+              onClick={() => update.mutate({ id: item.id, payload: { status: next } })}
+            >
+              {SHORT_LABEL[next]}
+              <Icon name="arrow_forward" size={13} />
             </button>
           )}
         </div>
@@ -212,25 +296,47 @@ export default function Tracker() {
     queryFn: applicationsApi.kanban,
   });
 
+  // Kept in the URL so opening a result and hitting Back returns to the same search.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const query = searchParams.get("q") || "";
+  const setQuery = (q) => setSearchParams(q ? { q } : {}, { replace: true });
+
   if (isLoading) return <PageLoader />;
+
+  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const searching = terms.length > 0;
 
   const totalApps = kanban.reduce((sum, col) => sum + col.items.length, 0);
   const rejected = kanban.find((c) => c.status === "rejected")?.items || [];
   const sponsorshipRejections = rejected.filter((i) => i.rejection_reason === "sponsorship").length;
-  const activeStages = kanban.filter((col) => col.items.length > 0);
+  const activeStages = kanban
+    .map((col) => ({
+      ...col,
+      items: searching
+        ? col.items.filter((item) => {
+            const haystack = searchableText(item, col.label);
+            return terms.every((t) => haystack.includes(t));
+          })
+        : col.items,
+    }))
+    .filter((col) => col.items.length > 0);
+  const matchCount = activeStages.reduce((sum, col) => sum + col.items.length, 0);
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Application Tracker</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          {totalApps} applications tracked
-          {sponsorshipRejections > 0 && (
-            <span className="ml-2 text-red-500">
-              · {sponsorshipRejections} sponsorship rejection{sponsorshipRejections > 1 ? "s" : ""}
-            </span>
-          )}
-        </p>
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-ink">Application Tracker</h1>
+          <p className="text-sm text-ink/55 mt-0.5">
+            {totalApps} applications tracked
+            {sponsorshipRejections > 0 && (
+              <span className="ml-2 text-coral-500">
+                · {sponsorshipRejections} sponsorship rejection{sponsorshipRejections > 1 ? "s" : ""}
+              </span>
+            )}
+          </p>
+        </div>
+        {totalApps > 0 && <SearchBox value={query} onChange={setQuery} />}
       </div>
 
       {/* Pipeline overview — keeps every stage visible without a horizontal scroll */}
@@ -241,16 +347,16 @@ export default function Tracker() {
               <span
                 className={clsx(
                   "w-2 h-2 rounded-full",
-                  col.items.length ? tint(col.status).dot : "bg-gray-200"
+                  col.items.length ? tint(col.status).dot : "bg-mist"
                 )}
               />
-              <span className={clsx("text-xs", col.items.length ? "text-gray-700" : "text-gray-400")}>
+              <span className={clsx("text-xs", col.items.length ? "text-ink/80" : "text-ink/40")}>
                 {col.label}
               </span>
               <span
                 className={clsx(
                   "text-xs font-semibold px-1.5 rounded",
-                  col.items.length ? "bg-gray-100 text-gray-700" : "text-gray-300"
+                  col.items.length ? "bg-petrol-50 text-ink/80" : "text-ink/25"
                 )}
               >
                 {col.items.length}
@@ -260,11 +366,18 @@ export default function Tracker() {
         </div>
       </div>
 
+      {searching && (
+        <p className="text-sm text-ink/55 px-1">
+          {matchCount} of {totalApps} applications match{" "}
+          <span className="font-medium text-ink">“{query.trim()}”</span>
+        </p>
+      )}
+
       {/* Rejection insight */}
-      {rejected.length >= 3 && (
-        <div className="card p-4 bg-amber-50 border-amber-200">
-          <p className="text-sm font-medium text-amber-800 mb-1">Rejection Pattern Analysis</p>
-          <div className="flex flex-wrap gap-4 text-xs text-amber-700">
+      {!searching && rejected.length >= 3 && (
+        <div className="card p-4 bg-gold-50 border-gold-200">
+          <p className="text-sm font-medium text-gold-700 mb-1">Rejection Pattern Analysis</p>
+          <div className="flex flex-wrap gap-4 text-xs text-gold-700">
             {REJECTION_REASONS.map((r) => {
               const count = rejected.filter((i) => i.rejection_reason === r.value).length;
               return count > 0 ? (
@@ -275,32 +388,45 @@ export default function Tracker() {
         </div>
       )}
 
-      <StampCollection kanban={kanban} />
+      {!searching && <StampCollection kanban={kanban} />}
 
       {/* Stages stacked vertically */}
       {activeStages.map((col) => (
         <div key={col.status}>
           <div className="flex items-center gap-2 mb-2">
             <span className={clsx("w-1 h-4 rounded-full", tint(col.status).bar)} />
-            <h2 className="text-sm font-semibold text-gray-700">{col.label}</h2>
-            <span className="text-xs text-gray-400">{col.items.length}</span>
+            <h2 className="text-sm font-semibold text-ink/80">{col.label}</h2>
+            <span className="text-xs text-ink/40">{col.items.length}</span>
           </div>
           <div className="card overflow-hidden flex">
             {/* the colour block that tells sections apart without shouting */}
             <div className={clsx("w-1 flex-shrink-0", tint(col.status).bar)} />
             <div className={clsx("flex-1 min-w-0", tint(col.status).tint)}>
               {col.items.map((item) => (
-                <AppRow key={item.id} item={item} colStatus={col.status} />
+                <AppRow key={item.id} item={item} colStatus={col.status} terms={terms} />
               ))}
             </div>
           </div>
         </div>
       ))}
 
+      {searching && matchCount === 0 && (
+        <div className="card p-10 text-center">
+          <Icon name="search_off" size={32} className="mb-2 text-ink/25" />
+          <p className="font-medium text-ink/80">No applications match “{query.trim()}”</p>
+          <p className="text-sm text-ink/55 mt-1 mb-4">
+            Try a company name, part of a job title, or a stage like “applied”.
+          </p>
+          <button className="btn-secondary" onClick={() => setQuery("")}>
+            Clear search
+          </button>
+        </div>
+      )}
+
       {totalApps === 0 && (
         <div className="card p-12 text-center">
-          <p className="font-medium text-gray-700">No applications tracked yet</p>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="font-medium text-ink/80">No applications tracked yet</p>
+          <p className="text-sm text-ink/55 mt-1">
             Save or mark a job as applied from its detail page to start tracking.
           </p>
         </div>

@@ -1,20 +1,21 @@
 import clsx from "clsx";
+import Icon from "@/components/common/Icon";
 
 /**
  * Journal-style rubber stamps for application milestones.
- * Rejection deliberately gets a soft autumn-leaf mark rather than a cross —
+ * Rejection deliberately gets a soft "eco" leaf mark rather than a cross —
  * the tracker is read most often on bad days.
  */
 export const STAMPS = {
-  saved: { emoji: "🔖", label: "Saved", bg: "bg-gray-100", border: "border-gray-300", text: "text-gray-500" },
-  applied: { emoji: "📮", label: "Applied", bg: "bg-blue-50", border: "border-blue-300", text: "text-blue-600" },
-  referral_asked: { emoji: "💌", label: "Referral", bg: "bg-purple-50", border: "border-purple-300", text: "text-purple-600" },
-  oa: { emoji: "✏️", label: "OA", bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-600" },
-  phone_screen: { emoji: "☎️", label: "Phone Screen", bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-600" },
-  interview: { emoji: "💬", label: "Interview", bg: "bg-orange-50", border: "border-orange-300", text: "text-orange-600" },
-  offer: { emoji: "🌸", label: "Offer", bg: "bg-green-50", border: "border-green-300", text: "text-green-600" },
-  rejected: { emoji: "🍂", label: "Not This Time", bg: "bg-rose-50", border: "border-rose-200", text: "text-rose-500" },
-  withdrawn: { emoji: "🕊️", label: "Withdrawn", bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-400" },
+  saved: { icon: "bookmark", label: "Saved", bg: "bg-petrol-50", border: "border-petrol-200", text: "text-ink/55" },
+  applied: { icon: "outgoing_mail", label: "Applied", bg: "bg-petrol-50", border: "border-petrol-200", text: "text-petrol-500" },
+  referral_asked: { icon: "handshake", label: "Referral", bg: "bg-plum-50", border: "border-plum-300", text: "text-plum-600" },
+  oa: { icon: "edit_note", label: "OA", bg: "bg-gold-50", border: "border-gold-300", text: "text-gold-600" },
+  phone_screen: { icon: "call", label: "Phone Screen", bg: "bg-gold-50", border: "border-gold-300", text: "text-gold-600" },
+  interview: { icon: "forum", label: "Interview", bg: "bg-clay-50", border: "border-clay-300", text: "text-clay-600" },
+  offer: { icon: "celebration", label: "Offer", bg: "bg-sage-50", border: "border-sage-300", text: "text-sage-600" },
+  rejected: { icon: "eco", label: "Not This Time", bg: "bg-coral-50", border: "border-coral-200", text: "text-coral-500" },
+  withdrawn: { icon: "air", label: "Withdrawn", bg: "bg-canvas", border: "border-mist", text: "text-ink/40" },
 };
 
 const SIZES = {
@@ -41,7 +42,7 @@ export default function Stamp({ status, size = "md", seed, title }) {
         SIZES[size]
       )}
     >
-      {stamp.emoji}
+      <Icon name={stamp.icon} size={size === "sm" ? 15 : 18} className={stamp.text} />
     </span>
   );
 }

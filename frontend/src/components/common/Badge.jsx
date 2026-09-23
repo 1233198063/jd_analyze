@@ -1,14 +1,15 @@
 import clsx from "clsx";
 import { getRegionLabel } from "@/utils/region";
+import Icon from "./Icon";
 
 const VARIANTS = {
-  green: "bg-green-100 text-green-700",
-  red: "bg-red-100 text-red-700",
-  yellow: "bg-yellow-100 text-yellow-700",
-  blue: "bg-blue-100 text-blue-700",
-  gray: "bg-gray-100 text-gray-600",
-  orange: "bg-orange-100 text-orange-700",
-  purple: "bg-purple-100 text-purple-700",
+  green: "bg-sage-100 text-sage-700",
+  red: "bg-coral-100 text-coral-700",
+  yellow: "bg-gold-100 text-gold-700",
+  blue: "bg-petrol-50 text-petrol-600",
+  gray: "bg-ink/[0.06] text-ink/55",
+  orange: "bg-clay-100 text-clay-700",
+  purple: "bg-plum-100 text-plum-700",
 };
 
 export default function Badge({ children, variant = "gray", className }) {
@@ -50,9 +51,9 @@ export function LevelBadge({ level }) {
 export function RegionBadge({ location, isRemote }) {
   const label = getRegionLabel(location, isRemote);
   if (!label) return null;
-  if (label === "US") return <Badge variant="blue">🇺🇸 US</Badge>;
+  if (label === "US") return <Badge variant="blue"><Icon name="flag" size={13} className="mr-1" />US</Badge>;
   if (label === "Remote") return <Badge variant="blue">Remote</Badge>;
-  return <Badge variant="purple">🌐 {label}</Badge>;
+  return <Badge variant="purple"><Icon name="public" size={13} className="mr-1" />{label}</Badge>;
 }
 
 export function AppStatusBadge({ status }) {

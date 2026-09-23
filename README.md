@@ -23,7 +23,8 @@ An AI-powered job search tool built for international students on OPT/STEM OPT n
 - **AI Cover Letter Drafts** — Generates a resume-grounded cover letter draft per job, ready to copy.
 - **Practice Interview Answers** — Paste a question you might get asked for a specific role and get back a concise, plain-English answer grounded in your actual resume, ready to copy.
 - **Job Discovery** — Polls seeded companies' Greenhouse / Lever / Ashby job boards for postings matching your target roles, scores and dedupes them automatically. Can run on a daily schedule (see `backend/DISCOVERY.md`).
-- **Application Tracker** — Kanban board tracking every application through: Saved → Applied → OA → Phone Screen → Interview → Offer / Rejected. Records rejection reasons (sponsorship / level / resume / no response) to identify patterns over time.
+- **Application Tracker** — Every application grouped by stage (Saved → Applied → Referral → OA → Phone Screen → Interview → Offer / Rejected / Withdrawn) in one vertical list under a pipeline-count strip, with a one-click button to advance each role to its next stage. Each application keeps a dated timeline (dates are editable on the job page, for steps logged after the fact), and a monthly stamp summary shows how many roles hit each stage. Rejections record a reason (form rejection / ghosted / sponsorship / level / resume / OA / interview / other) to surface patterns over time.
+- **Tracker Search** — Search every tracked application by title, company, stage, rejection reason, or your notes. Multiple words narrow the results (e.g. `product rejected`), matches are highlighted, and the query is kept in the URL so opening a job and going back keeps your search.
 - **Referral Helper** — For high-score roles, generates a short LinkedIn cold message targeting alumni or employees for a referral.
 - **Dashboard & Company Profiles** — Quick overview of your top-scoring recent matches, plus a per-company profile showing H-1B filing history imported from DOL data.
 
@@ -31,13 +32,15 @@ An AI-powered job search tool built for international students on OPT/STEM OPT n
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React 18, Vite, Tailwind CSS, TanStack Query, Zustand, React Router v6 |
+| Frontend | React 18, Vite, Tailwind CSS, TanStack Query, React Router v6 |
 | Backend | Python 3.11, FastAPI, SQLAlchemy (async), Alembic |
 | Database | PostgreSQL 16 |
 | AI | OpenAI GPT-4o |
 | Task Queue | Celery + Redis (optional, for background processing) |
 | Scraping | httpx + BeautifulSoup4 |
 | Charts | Recharts |
+| Icons | Google Material Symbols (web font) |
+| Resume diff | jsdiff (`diff`) |
 
 ## Project Structure
 
@@ -55,9 +58,29 @@ jd_analyze/
 └── frontend/
     └── src/
         ├── api/                # Typed API client functions
-        ├── components/         # Reusable UI components
-        └── pages/              # Route-level page components
+        ├── components/         # Reusable UI components (common/Icon.jsx is the single icon source)
+        ├── pages/              # Route-level page components
+        └── utils/              # Resume formatting/diffing, PDF export, helpers
 ```
+
+## UI & Design System
+
+The UI uses a custom "Petrol × Bubblegum" palette, defined as Tailwind tokens in `frontend/tailwind.config.js`:
+
+| Token | Hex | Used for |
+|-------|-----|----------|
+| `canvas` | `#F2F6F6` | Page background |
+| `ink` | `#173A3E` | Text (muted text uses opacity, e.g. `text-ink/55`) and the sidebar |
+| `petrol` | `#185257` (500) | Primary buttons, links, brand accents |
+| `bubblegum` | `#F5A0B7` (400) | Accent: primary-button hover, small corner tags, and marking AI-generated content |
+| `mist` | `#D7ECEB` | Borders and soft surfaces |
+
+Status colors are muted custom scales rather than Tailwind defaults: `sage` (good / apply), `coral` (rejected / bad), `gold` (caution / maybe), `clay` (elevated), `plum` (remote / referral).
+
+Conventions:
+- No emoji in the UI. Use `<Icon name="..." />` (Google Material Symbols).
+- The forward action is always the most prominent button. Negative actions such as "Mark rejected" stay quiet until hovered.
+- The resume preview (`ResumePreview.jsx`) stays neutral black-on-white because it is what gets exported to PDF.
 
 ## Getting Started
 
@@ -149,6 +172,11 @@ The system normalizes company names, computes approval rates, and identifies SWE
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT access token lifetime, in minutes |
 | `CORS_ORIGINS` | JSON array of allowed frontend origins |
 | `H1B_DATA_DIR` | Directory for downloaded DOL/USCIS H-1B CSV files |
+
+## Troubleshooting (local dev on Windows)
+
+- **A page loads forever, but the API answers fine with `curl`.** On Windows, uvicorn cuts off responses larger than about 128 KB (at exactly 130,560 bytes) when the request asks to close the connection. Vite's proxy does that by default, so `frontend/vite.config.js` gives the proxy a keep-alive agent to avoid it. Don't remove that agent. To check whether this is the cause, compare `curl -H "Connection: close" <backend url>` with a plain `curl`, and look for `http proxy error … ECONNRESET` in the Vite output.
+- **Backend edits don't seem to take effect.** `uvicorn --reload` can log `Reloading...` without ever starting a new worker, so the old code keeps serving requests. If the log never shows `Application startup complete` again, stop uvicorn and start it again manually.
 
 ## License
 

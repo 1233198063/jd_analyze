@@ -7,6 +7,7 @@ import { PageLoader } from "@/components/common/Loading";
 import ResumePreview from "@/components/features/ResumePreview";
 import { classifyLines, extractCandidateName, buildResumeFilename } from "@/utils/resumeFormat";
 import { printElementAsPdf } from "@/utils/printElement";
+import Icon from "@/components/common/Icon";
 import dayjs from "dayjs";
 
 export default function ResumePage() {
@@ -89,8 +90,8 @@ export default function ResumePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Resume</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-ink">Resume</h1>
+          <p className="text-sm text-ink/55 mt-0.5">
             Your master resume is used for all job scoring. Keep it up to date.
           </p>
         </div>
@@ -111,31 +112,33 @@ export default function ResumePage() {
       </div>
 
       {rescoreAll.isError && (
-        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg bg-coral-50 border border-coral-200 px-4 py-3 text-sm text-coral-700">
           {rescoreAll.error.message}
         </div>
       )}
 
       {rescoreAll.data && !rescoreAll.isPending && (
-        <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm">
-          <p className="text-green-800">
+        <div className="rounded-lg bg-sage-50 border border-sage-200 px-4 py-3 text-sm">
+          <p className="text-sage-700">
             Re-scored <span className="font-semibold">{rescoreAll.data.rescored}</span> jobs against{" "}
             "{rescoreAll.data.resume_name}" ({rescoreAll.data.resume_skill_count} skills) —{" "}
             <span className="font-semibold">{rescoreAll.data.score_changed}</span> scores changed.
           </p>
           {rescoreAll.data.recommendation_changes?.length > 0 && (
             <div className="mt-2 space-y-0.5">
-              <p className="text-xs font-medium text-green-700">
+              <p className="text-xs font-medium text-sage-700">
                 {rescoreAll.data.recommendation_changes.length} recommendation changes:
               </p>
               {rescoreAll.data.recommendation_changes.slice(0, 8).map((c) => (
                 <Link
                   key={c.job_id}
                   to={`/jobs/${c.job_id}`}
-                  className="block text-xs text-green-700 hover:underline truncate"
+                  className="block text-xs text-sage-700 hover:underline truncate"
                 >
-                  {c.from_recommendation} → <span className="font-medium">{c.to_recommendation}</span>{" "}
-                  ({c.from_score} → {c.to_score}) · {c.title || "Untitled"} — {c.company_name || "?"}
+                  {c.from_recommendation} <Icon name="arrow_forward" size={11} />{" "}
+                  <span className="font-medium">{c.to_recommendation}</span>{" "}
+                  ({c.from_score} <Icon name="arrow_forward" size={11} /> {c.to_score}) · {c.title || "Untitled"} —{" "}
+                  {c.company_name || "?"}
                 </Link>
               ))}
             </div>
@@ -145,7 +148,7 @@ export default function ResumePage() {
 
       {showForm && (
         <form onSubmit={handleSubmit} className="card p-6 space-y-4">
-          <h2 className="font-semibold text-gray-900">{editId ? "Edit Resume" : "Add Resume"}</h2>
+          <h2 className="font-semibold text-ink">{editId ? "Edit Resume" : "Add Resume"}</h2>
           <div>
             <label className="label">Name</label>
             <input
@@ -165,7 +168,7 @@ export default function ResumePage() {
               onChange={(e) => setRawText(e.target.value)}
               required
             />
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-ink/40 mt-1">
               Plain text works best. Include all sections: summary, experience, projects, skills, education.
             </p>
           </div>
@@ -176,7 +179,7 @@ export default function ResumePage() {
               onChange={(e) => setIsMaster(e.target.checked)}
               className="rounded"
             />
-            <span className="text-sm text-gray-700">Set as master resume (used for scoring)</span>
+            <span className="text-sm text-ink/80">Set as master resume (used for scoring)</span>
           </label>
 
           <div className="flex gap-3">
@@ -192,16 +195,16 @@ export default function ResumePage() {
 
       <div className="space-y-3">
         {resumes.map((r) => (
-          <div key={r.id} className={`card p-5 ${r.is_master ? "border-blue-300 bg-blue-50/30" : ""}`}>
+          <div key={r.id} className={`card p-5 ${r.is_master ? "border-petrol-200 bg-petrol-50/30" : ""}`}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="font-semibold text-gray-900 truncate">{r.name}</p>
+                  <p className="font-semibold text-ink truncate">{r.name}</p>
                   {r.is_master && (
-                    <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">Master</span>
+                    <span className="text-xs bg-bubblegum-400 text-ink font-medium px-2 py-0.5 rounded-full">Master</span>
                   )}
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-ink/40 mt-0.5">
                   Updated {dayjs(r.updated_at).format("MMM D, YYYY")} ·{" "}
                   {r.raw_text.length.toLocaleString()} chars
                 </p>
@@ -209,12 +212,12 @@ export default function ResumePage() {
                 {r.skills.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2">
                     {r.skills.slice(0, 15).map((s) => (
-                      <span key={s} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                      <span key={s} className="text-xs bg-petrol-50 text-ink/70 px-2 py-0.5 rounded">
                         {s}
                       </span>
                     ))}
                     {r.skills.length > 15 && (
-                      <span className="text-xs text-gray-400">+{r.skills.length - 15} more</span>
+                      <span className="text-xs text-ink/40">+{r.skills.length - 15} more</span>
                     )}
                   </div>
                 )}
@@ -231,7 +234,7 @@ export default function ResumePage() {
                   Edit
                 </button>
                 <button
-                  className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                  className="text-xs px-3 py-1.5 rounded-lg border border-coral-200 text-coral-600 hover:bg-coral-50"
                   onClick={() => { if (confirm("Delete this resume?")) del.mutate(r.id); }}
                 >
                   Delete
@@ -240,16 +243,16 @@ export default function ResumePage() {
             </div>
 
             {previewId === r.id && (
-              <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="mt-4 pt-4 border-t border-mist/60">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-medium text-gray-500">
+                  <p className="text-xs font-medium text-ink/55">
                     A4 preview — auto-fit to one page
                   </p>
                   <button className="btn-primary text-xs px-2.5 py-1" onClick={() => downloadPdf(r)}>
                     Download PDF
                   </button>
                 </div>
-                <div className="max-h-[70vh] overflow-y-auto bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <div className="max-h-[70vh] overflow-y-auto bg-canvas border border-mist rounded-lg p-3">
                   <ResumePreview lines={classifyLines(r.raw_text)} id={`resume-pdf-${r.id}`} fitToPage />
                 </div>
               </div>
@@ -259,9 +262,9 @@ export default function ResumePage() {
 
         {resumes.length === 0 && !showForm && (
           <div className="card p-12 text-center">
-            <p className="text-2xl mb-2">≡</p>
-            <p className="font-medium text-gray-700">No resume added yet</p>
-            <p className="text-sm text-gray-500 mt-1 mb-4">
+            <Icon name="description" size={32} className="mb-2 text-petrol-500" />
+            <p className="font-medium text-ink/80">No resume added yet</p>
+            <p className="text-sm text-ink/55 mt-1 mb-4">
               Add your master resume to enable resume-to-JD scoring
             </p>
             <button className="btn-primary" onClick={() => setShowForm(true)}>
