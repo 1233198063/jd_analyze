@@ -4,6 +4,7 @@ import { jobsApi } from "@/api/jobs";
 import { applicationsApi } from "@/api/applications";
 import JobCard from "@/components/features/JobCard";
 import { PageLoader } from "@/components/common/Loading";
+import Icon from "@/components/common/Icon";
 
 const SEARCH_KEYWORDS = [
   "Frontend Software Engineer",
@@ -62,9 +63,10 @@ function SourcePill({ label, href }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="px-3 py-1 rounded-full text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-colors"
+      className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border border-mist bg-white text-ink/80 hover:border-bubblegum-400 hover:text-ink transition-colors"
     >
-      {label} ↗
+      {label}
+      <Icon name="open_in_new" size={13} />
     </a>
   );
 }
@@ -72,13 +74,16 @@ function SourcePill({ label, href }) {
 function SourcesCard() {
   return (
     <div className="card p-5">
-      <p className="text-sm font-semibold text-gray-800 mb-1">Search by Source</p>
-      <p className="text-xs text-gray-400 mb-3">
+      <p className="text-sm font-semibold text-ink mb-1">Search by Source</p>
+      <p className="text-xs text-ink/40 mb-3">
         Opens a search on that site for your target roles — copy any posting's URL or text back into "Analyze JD".
       </p>
       <div className="space-y-3">
         <div>
-          <p className="text-xs text-gray-500 mb-1.5">✓ Their listing URLs work directly with the analyzer</p>
+          <p className="text-xs text-ink/50 mb-1.5 inline-flex items-center gap-1">
+            <Icon name="check_circle" size={13} className="text-sage-600" />
+            Their listing URLs work directly with the analyzer
+          </p>
           <div className="flex flex-wrap gap-1.5">
             {URL_SOURCES.map((s) => (
               <SourcePill key={s.label} label={s.label} href={s.href} />
@@ -86,8 +91,9 @@ function SourcesCard() {
           </div>
         </div>
         <div>
-          <p className="text-xs text-gray-500 mb-1.5">
-            ✗ Blocks scraping — paste the job text instead of the URL
+          <p className="text-xs text-ink/50 mb-1.5 inline-flex items-center gap-1">
+            <Icon name="block" size={13} className="text-coral-600" />
+            Blocks scraping — paste the job text instead of the URL
           </p>
           <div className="flex flex-wrap gap-1.5">
             {TEXT_ONLY_SOURCES.map((s) => (
@@ -100,18 +106,18 @@ function SourcesCard() {
   );
 }
 
-function StatCard({ label, value, sub, color = "blue" }) {
+function StatCard({ label, value, sub, color = "petrol" }) {
   const colors = {
-    blue: "text-blue-600",
-    green: "text-green-600",
-    yellow: "text-yellow-600",
-    red: "text-red-600",
+    petrol: "text-petrol-500",
+    green: "text-sage-700",
+    yellow: "text-gold-700",
+    red: "text-coral-700",
   };
   return (
     <div className="card p-5">
-      <p className="text-sm text-gray-500">{label}</p>
+      <p className="text-sm text-ink/50">{label}</p>
       <p className={`text-3xl font-bold mt-1 ${colors[color]}`}>{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+      {sub && <p className="text-xs text-ink/40 mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -150,8 +156,8 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Your job search intelligence overview</p>
+          <h1 className="text-2xl font-bold text-ink">Dashboard</h1>
+          <p className="text-sm text-ink/50 mt-0.5">Your job search intelligence overview</p>
         </div>
         <Link to="/jobs/add" className="btn-primary">
           + Analyze JD
@@ -160,11 +166,11 @@ export default function Dashboard() {
 
       {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-        <StatCard label="Total JDs" value={stats.total} color="blue" />
+        <StatCard label="Total JDs" value={stats.total} color="petrol" />
         <StatCard label="Apply" value={stats.apply} sub="80+ score" color="green" />
         <StatCard label="Maybe" value={stats.maybe} sub="60–79 score" color="yellow" />
         <StatCard label="Auto Rejected" value={stats.rejected} sub="hard filters" color="red" />
-        <StatCard label="Applied" value={applied} color="blue" />
+        <StatCard label="Applied" value={applied} color="petrol" />
         <StatCard label="Interviews" value={interviews} color="green" />
       </div>
 
@@ -173,9 +179,9 @@ export default function Dashboard() {
       {/* Top priority jobs */}
       {prioritized.length > 0 && (
         <section>
-          <h2 className="text-base font-semibold text-gray-800 mb-3">
+          <h2 className="text-base font-semibold text-ink mb-3">
             Priority Applications
-            <span className="ml-2 text-xs font-normal text-gray-400">score 60+</span>
+            <span className="ml-2 text-xs font-normal text-ink/40">score 60+</span>
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {prioritized.map((job) => (
@@ -189,8 +195,8 @@ export default function Dashboard() {
       {recent.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-gray-800">Recent JDs</h2>
-            <span className="text-xs text-gray-400">{jobs.length} total</span>
+            <h2 className="text-base font-semibold text-ink">Recent JDs</h2>
+            <span className="text-xs text-ink/40">{jobs.length} total</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {recent.map((job) => (
@@ -202,9 +208,9 @@ export default function Dashboard() {
 
       {jobs.length === 0 && (
         <div className="card p-12 text-center">
-          <p className="text-4xl mb-3">◈</p>
-          <p className="font-medium text-gray-700">No jobs analyzed yet</p>
-          <p className="text-sm text-gray-500 mt-1 mb-4">
+          <Icon name="dashboard" size={40} className="mb-3 text-petrol-500" />
+          <p className="font-medium text-ink">No jobs analyzed yet</p>
+          <p className="text-sm text-ink/50 mt-1 mb-4">
             Paste a JD or drop a Greenhouse / Lever / Ashby link to get started
           </p>
           <Link to="/jobs/add" className="btn-primary">

@@ -15,8 +15,8 @@ export default function JobCard({ job }) {
     <Link
       to={`/jobs/${job.id}`}
       className={clsx(
-        "card block p-4 hover:shadow-md transition-shadow",
-        rejected && "border-red-200 bg-red-50/30"
+        "card block p-4 hover:shadow-md hover:border-bubblegum-300 transition-all",
+        rejected && "border-coral-200 bg-coral-50/40"
       )}
     >
       <div className="flex items-start gap-3">
@@ -25,12 +25,12 @@ export default function JobCard({ job }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="font-semibold text-gray-900 truncate">
+              <p className="font-semibold text-ink truncate">
                 {job.title || "Untitled Role"}
               </p>
-              <p className="text-sm text-gray-600 truncate">{job.company_name || "—"}</p>
+              <p className="text-sm text-ink/60 truncate">{job.company_name || "—"}</p>
             </div>
-            <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">
+            <span className="text-xs text-ink/40 whitespace-nowrap flex-shrink-0">
               {dayjs(job.posted_at || job.created_at).fromNow()}
             </span>
           </div>

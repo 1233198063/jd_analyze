@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { jobsApi } from "@/api/jobs";
+import Icon from "@/components/common/Icon";
 
 /**
  * Lets the candidate paste a question they might get asked in an interview for this job and get
@@ -36,8 +37,8 @@ export default function InterviewAnswerPanel({ jobId }) {
   return (
     <div className="card p-5">
       <div>
-        <h3 className="text-sm font-semibold text-gray-700">Practice Interview Answers</h3>
-        <p className="text-xs text-gray-400 mt-0.5">
+        <h3 className="text-sm font-semibold text-ink/80">Practice Interview Answers</h3>
+        <p className="text-xs text-ink/40 mt-0.5">
           Paste a question you might get asked for this role — get back a plain-English answer
           grounded in your actual resume, ready to copy.
         </p>
@@ -60,22 +61,25 @@ export default function InterviewAnswerPanel({ jobId }) {
         </button>
       </form>
 
-      {generate.isError && <p className="text-xs text-red-600 mt-2">{generate.error.message}</p>}
+      {generate.isError && <p className="text-xs text-coral-600 mt-2">{generate.error.message}</p>}
 
       {answers.length > 0 && (
         <div className="mt-4 space-y-3">
           {answers.map((qa, i) => (
-            <div key={i} className="rounded-lg border border-gray-200 p-3 space-y-2">
+            <div key={i} className="rounded-lg border border-bubblegum-200 bg-bubblegum-100/30 p-3 space-y-2">
               <div className="flex items-start justify-between gap-3">
-                <p className="text-xs font-medium text-gray-500">Q: {qa.question}</p>
+                <p className="text-xs font-medium text-ink/55 inline-flex items-start gap-1">
+                  <Icon name="auto_awesome" size={13} className="text-bubblegum-600 flex-shrink-0 mt-px" />
+                  Q: {qa.question}
+                </p>
                 <button
-                  className="text-xs text-blue-600 hover:underline flex-shrink-0"
+                  className="text-xs text-petrol-500 hover:underline flex-shrink-0"
                   onClick={() => copy(qa.answer, i)}
                 >
                   {copiedIndex === i ? "Copied!" : "Copy"}
                 </button>
               </div>
-              <p className="text-sm text-gray-800 whitespace-pre-line">{qa.answer}</p>
+              <p className="text-sm text-ink/90 whitespace-pre-line">{qa.answer}</p>
             </div>
           ))}
         </div>

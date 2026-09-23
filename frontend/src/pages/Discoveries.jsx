@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { jobsApi } from "@/api/jobs";
 import JobCard from "@/components/features/JobCard";
 import { PageLoader, Spinner } from "@/components/common/Loading";
+import Icon from "@/components/common/Icon";
 
 const AGE_FILTERS = [
   { label: "Today", hours: 24 },
@@ -54,8 +55,8 @@ export default function Discoveries() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Daily Discoveries</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="text-2xl font-bold text-ink">Daily Discoveries</h1>
+          <p className="text-sm text-ink/55 mt-0.5">
             Auto-found roles from Greenhouse / Lever / Ashby matching your target titles, ranked by score.
           </p>
         </div>
@@ -65,13 +66,13 @@ export default function Discoveries() {
         </button>
       </div>
 
-      <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit">
+      <div className="flex gap-1 p-1 bg-petrol-50 rounded-lg w-fit">
         {AGE_FILTERS.map((f) => (
           <button
             key={f.label}
             onClick={() => setMaxAgeHours(f.hours)}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              maxAgeHours === f.hours ? "bg-white shadow text-gray-900" : "text-gray-600 hover:text-gray-800"
+              maxAgeHours === f.hours ? "bg-white shadow text-ink" : "text-ink/70 hover:text-ink/90"
             }`}
           >
             {f.label}
@@ -80,41 +81,41 @@ export default function Discoveries() {
       </div>
 
       {running && (
-        <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-700">
+        <div className="rounded-lg bg-petrol-50 border border-petrol-200 px-4 py-3 text-sm text-petrol-600">
           Checking company boards and scoring matches — this runs in the background and can take a few
           minutes. Feel free to navigate away; this page updates when it's done.
         </div>
       )}
 
       {runError && (
-        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg bg-coral-50 border border-coral-200 px-4 py-3 text-sm text-coral-700">
           {runError}
         </div>
       )}
 
       {statusData?.status === "error" && (
-        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg bg-coral-50 border border-coral-200 px-4 py-3 text-sm text-coral-700">
           Last run failed: {statusData.summary?.error}
         </div>
       )}
 
       {summary && !summary.error && (
-        <div className="card p-4 text-xs text-gray-600 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="card p-4 text-xs text-ink/70 grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div>
-            <p className="text-gray-400">Companies checked</p>
-            <p className="text-base font-semibold text-gray-900">{summary.companies_checked}</p>
+            <p className="text-ink/40">Companies checked</p>
+            <p className="text-base font-semibold text-ink">{summary.companies_checked}</p>
           </div>
           <div>
-            <p className="text-gray-400">Title matches</p>
-            <p className="text-base font-semibold text-gray-900">{summary.title_matched}</p>
+            <p className="text-ink/40">Title matches</p>
+            <p className="text-base font-semibold text-ink">{summary.title_matched}</p>
           </div>
           <div>
-            <p className="text-gray-400">New jobs added</p>
-            <p className="text-base font-semibold text-green-600">{summary.created}</p>
+            <p className="text-ink/40">New jobs added</p>
+            <p className="text-base font-semibold text-sage-600">{summary.created}</p>
           </div>
           <div>
-            <p className="text-gray-400">Already seen</p>
-            <p className="text-base font-semibold text-gray-900">{summary.skipped_duplicate}</p>
+            <p className="text-ink/40">Already seen</p>
+            <p className="text-base font-semibold text-ink">{summary.skipped_duplicate}</p>
           </div>
         </div>
       )}
@@ -128,11 +129,11 @@ export default function Discoveries() {
       ) : (
         !running && (
           <div className="card p-12 text-center">
-            <p className="text-4xl mb-3">⚡</p>
-            <p className="font-medium text-gray-700">
+            <Icon name="bolt" size={40} className="mb-3 text-petrol-500" />
+            <p className="font-medium text-ink/80">
               {maxAgeHours ? "Nothing this fresh yet" : "No discoveries yet"}
             </p>
-            <p className="text-sm text-gray-500 mt-1 mb-4">
+            <p className="text-sm text-ink/55 mt-1 mb-4">
               {maxAgeHours
                 ? "No matching roles posted in this window. Try \"All time\", or click \"Run Now\" to check again."
                 : "Click \"Run Now\" to search now, or set up the daily scheduled task — see backend/DISCOVERY.md."}
