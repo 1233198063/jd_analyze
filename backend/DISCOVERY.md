@@ -7,7 +7,7 @@ then runs them through the normal analyze-and-score pipeline. Already-seen posti
 (by URL) are skipped, so it's safe to run repeatedly.
 
 Capped at 25 new postings per run (`MAX_NEW_PER_RUN` in `discovery_service.py`) to
-bound OpenAI cost/time, spread round-robin across companies so no single employer
+bound Codex usage and time (each new posting costs two Codex calls, roughly 30-40s), spread round-robin across companies so no single employer
 eats the whole cap.
 
 ## Run it

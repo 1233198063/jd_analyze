@@ -6,10 +6,11 @@ import { applicationsApi } from "@/api/applications";
 import { PageLoader } from "@/components/common/Loading";
 import ScoreRing, { ScoreBar } from "@/components/features/ScoreRing";
 import ResumeTailorPanel from "@/components/features/ResumeTailorPanel";
+import ResumePickPanel from "@/components/features/ResumePickPanel";
 import InterviewAnswerPanel from "@/components/features/InterviewAnswerPanel";
 import ApplicationTimeline from "@/components/features/ApplicationTimeline";
 import Icon from "@/components/common/Icon";
-import Badge, { SponsorBadge, LevelBadge, RecommendationBadge, RegionBadge } from "@/components/common/Badge";
+import Badge, { SponsorBadge, LevelBadge, RecommendationBadge, RegionBadge, PoolBadge } from "@/components/common/Badge";
 import clsx from "clsx";
 
 function Section({ title, children }) {
@@ -42,6 +43,7 @@ export default function JobDetail() {
   const [copied, setCopied] = useState(false);
   const [coverLetterOpen, setCoverLetterOpen] = useState(false);
   const [coverLetterCopied, setCoverLetterCopied] = useState(false);
+  const [tailorOpen, setTailorOpen] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["job", jobId],
@@ -138,6 +140,9 @@ export default function JobDetail() {
           </div>
 
           <div className="flex flex-wrap gap-2 mt-2">
+            {ms && !rejected && (
+              <PoolBadge pool={ms.application_pool} reason={ms.application_pool_reason} />
+            )}
             {ms && (
               <RecommendationBadge recommendation={ms.recommendation} score={ms.overall_score} />
             )}
@@ -202,6 +207,29 @@ export default function JobDetail() {
                   <dt className="text-ink/55 w-24 flex-shrink-0">Experience</dt>
                   <dd className="text-ink">
                     {analysis.years_min ?? 0}–{analysis.years_max ?? "∞"} years
+                  </dd>
+                </div>
+              )}
+              {analysis.min_years_experience != null && (
+                <div className="flex gap-2">
+                  <dt className="text-ink/55 w-24 flex-shrink-0">Minimum</dt>
+                  <dd className="text-ink">
+                    {analysis.min_years_experience} years
+                    <span className="text-ink/55">
+                      {analysis.years_requirement_is_hard
+                        ? " · stated as a hard requirement"
+                        : " · not stated as a hard requirement"}
+                    </span>
+                  </dd>
+                </div>
+              )}
+              {analysis.internship_experience_accepted != null && (
+                <div className="flex gap-2">
+                  <dt className="text-ink/55 w-24 flex-shrink-0">Internships</dt>
+                  <dd className={analysis.internship_experience_accepted ? "text-sage-700" : "text-ink/55"}>
+                    {analysis.internship_experience_accepted
+                      ? "Count toward the requirement"
+                      : "Not mentioned as counting"}
                   </dd>
                 </div>
               )}
@@ -328,8 +356,29 @@ export default function JobDetail() {
         )}
       </div>
 
-      {/* Tailor resume */}
-      {!rejected && analysis && <ResumeTailorPanel jobId={jobId} jobTitle={analysis?.title} />}
+      {/* Pick a resume, then revise it for this job's keywords — the default path */}
+      {!rejected && analysis && <ResumePickPanel jobId={jobId} jobTitle={analysis?.title} />}
+
+      {/* Full rewrite: the heavier option, folded away unless asked for */}
+      {!rejected && analysis && (
+        <div className="card p-5">
+          <button
+            className="flex items-center gap-2 w-full text-left"
+            onClick={() => setTailorOpen((v) => !v)}
+          >
+            <Icon name={tailorOpen ? "expand_more" : "chevron_right"} size={16} className="text-ink/40" />
+            <span className="text-sm font-semibold text-ink/80">Rewrite the whole resume</span>
+            <span className="text-xs text-ink/40">
+              — heavier option, for roles worth reshaping the resume around
+            </span>
+          </button>
+          {tailorOpen && (
+            <div className="mt-4">
+              <ResumeTailorPanel jobId={jobId} jobTitle={analysis?.title} />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Practice interview answers */}
       {!rejected && analysis && <InterviewAnswerPanel jobId={jobId} />}

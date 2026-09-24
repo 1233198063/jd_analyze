@@ -4,7 +4,7 @@ import json
 import os
 
 # Corporate/antivirus TLS inspection on this machine breaks certifi's bundled
-# CA store (httpx/openai calls fail with CERTIFICATE_VERIFY_FAILED even though
+# CA store (httpx calls fail with CERTIFICATE_VERIFY_FAILED even though
 # curl, which uses the Windows cert store, works fine). certs/combined_cacert.pem
 # is certifi's bundle plus the local trusted root CAs pulled from Windows.
 _combined_ca_bundle = os.path.join(os.path.dirname(__file__), "..", "..", "certs", "combined_cacert.pem")
@@ -15,12 +15,16 @@ if os.path.isfile(_combined_ca_bundle):
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     DATABASE_URL: str = "postgresql+asyncpg://jdanalyze:jdanalyze_dev@localhost:5432/jdanalyze"
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    OPENAI_API_KEY: str = ""
+    # AI runs through the local Codex CLI, signed in with a ChatGPT account (`codex login`).
+    CODEX_PATH: str = ""  # empty = auto-detect (PATH, then the Codex desktop app's bundled CLI)
+    CODEX_MODEL: str = "gpt-6-sol"
+    CODEX_REASONING_EFFORT: str = "low"
+    CODEX_TIMEOUT_SECONDS: int = 240
 
     SECRET_KEY: str = "dev-secret-key"
     ALGORITHM: str = "HS256"

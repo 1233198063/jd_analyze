@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import clsx from "clsx";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { SponsorBadge, LevelBadge, AppStatusBadge, RecommendationBadge, RegionBadge } from "@/components/common/Badge";
+import { SponsorBadge, LevelBadge, AppStatusBadge, RecommendationBadge, RegionBadge, PoolBadge } from "@/components/common/Badge";
 import ScoreRing from "./ScoreRing";
 
 dayjs.extend(relativeTime);
@@ -36,6 +36,7 @@ export default function JobCard({ job }) {
           </div>
 
           <div className="flex flex-wrap gap-1.5 mt-2">
+            {!rejected && <PoolBadge pool={job.application_pool} />}
             {job.recommendation && (
               <RecommendationBadge recommendation={job.recommendation} score={score} />
             )}

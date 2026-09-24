@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 from app.core.config import settings
 from app.services.skills import normalize_skill_terms
-from app.models.job import SponsorshipStatus, JobLevel, Recommendation
+from app.models.job import SponsorshipStatus, JobLevel, Recommendation, ApplicationPool
 from app.models.company import CompanySize
 
 
@@ -31,6 +31,9 @@ class ScoreBreakdown:
 
     is_auto_rejected: bool = False
     auto_reject_reasons: list[str] = field(default_factory=list)
+
+    pool: ApplicationPool = ApplicationPool.selective
+    pool_reason: str = ""
 
     @property
     def total(self) -> float:
@@ -113,6 +116,119 @@ def detect_region(location: str | None) -> tuple[str, bool] | None:
     return None
 
 
+# Titles that mark a role as open to early-career candidates. Checked only after the
+# senior keywords, so "Associate Director" still reads as senior.
+EARLY_CAREER_TITLE_PATTERNS = [
+    "junior", "jr.", "jr ", "associate", "early career", "early-career",
+    "entry level", "entry-level", "apprentice", "trainee",
+]
+
+# "Software Engineer I" / "Engineer 1" — anchored to the end so it can't fire on the
+# stray "i" inside a title like "AI Engineer".
+ENTRY_RANK_SUFFIX = re.compile(r"\b(i|1)\s*$")
+
+# A 2-4y role only earns the selective pool if the work itself looks like a genuine
+# fit — out of the 20 skill-match points, this is the bar for "highly aligned".
+SELECTIVE_SKILL_FLOOR = 12.0
+
+# Explicit floor at or above which a role is out of reach regardless of anything else.
+HARD_REJECT_YEARS = 5
+
+
+def _experience_signals(analysis: dict) -> tuple[int | None, bool | None, bool | None]:
+    """(minimum years, internships accepted, years floor is hard) for a parsed JD.
+
+    `min_years_experience` / `internship_experience_accepted` / `years_requirement_is_hard`
+    are extracted independently of the title, but analyses parsed before those fields
+    existed only carry the nested years_experience block — fall back to it so old jobs
+    still classify instead of all landing in one bucket.
+    """
+    min_years = analysis.get("min_years_experience")
+    if min_years is None:
+        min_years = (analysis.get("years_experience") or {}).get("min")
+    try:
+        min_years = int(min_years) if min_years is not None else None
+    except (TypeError, ValueError):
+        min_years = None
+
+    return (
+        min_years,
+        analysis.get("internship_experience_accepted"),
+        analysis.get("years_requirement_is_hard"),
+    )
+
+
+def _senior_signal(analysis: dict) -> str | None:
+    """Why this role reads as senior, or None. Title and level are both checked, since
+    the parsed level can disagree with a title like 'Staff Engineer'."""
+    title_lower = (analysis.get("title") or "").lower()
+    for kw in settings.SENIOR_LEVEL_KEYWORDS:
+        if kw not in title_lower:
+            continue
+        # "Member of Technical Staff" / "Member of Product Staff" is a flat-title
+        # convention at AI labs, not a Staff-level rank.
+        if kw == "staff" and "member of" in title_lower:
+            continue
+        return f"'{kw}' in title"
+
+    level = analysis.get("level", "unknown")
+    if level in ("senior", "staff", "principal", "manager"):
+        return f"level parsed as '{level}'"
+    return None
+
+
+def classify_pool(analysis: dict, skills_score: float) -> tuple[ApplicationPool, str]:
+    """Sort a role into an effort pool, reading experience requirements over the title.
+
+    primary       — Junior / Associate / Early Career, <=2 years, or <=3 years when
+                    internship experience explicitly counts.
+    selective      — 2-4 years with no hard floor (or years never stated) and work that
+                    lines up with real project experience.
+    deprioritized  — Senior / Staff / Lead, or a hard 2-4 year floor.
+    """
+    min_years, internship_ok, years_hard = _experience_signals(analysis)
+    level = analysis.get("level", "unknown")
+    title_lower = (analysis.get("title") or "").lower()
+
+    senior = _senior_signal(analysis)
+    if senior:
+        return ApplicationPool.deprioritized, f"Senior-track role ({senior})"
+    if min_years is not None and min_years >= HARD_REJECT_YEARS:
+        return ApplicationPool.deprioritized, f"Asks for {min_years}+ years"
+
+    # --- primary ---
+    if level in ("intern", "entry"):
+        return ApplicationPool.primary, f"Entry-level role (level '{level}')"
+    if min_years is not None and min_years <= 2:
+        return ApplicationPool.primary, f"Minimum {min_years} years of experience"
+    if min_years is not None and min_years <= 3 and internship_ok:
+        return ApplicationPool.primary, f"{min_years} years, and internship experience counts"
+    if level == "junior":
+        return ApplicationPool.primary, "Junior-level role"
+    if any(p in title_lower for p in EARLY_CAREER_TITLE_PATTERNS) or ENTRY_RANK_SUFFIX.search(title_lower):
+        return ApplicationPool.primary, "Title is aimed at early-career candidates"
+    if internship_ok and (min_years is None or min_years <= 3):
+        return ApplicationPool.primary, "Internship experience explicitly counts"
+
+    # --- selective ---
+    if min_years is None:
+        return (
+            ApplicationPool.selective,
+            "No years requirement stated — worth reading before ruling out",
+        )
+    if years_hard:
+        return ApplicationPool.deprioritized, f"Hard floor of {min_years} years"
+    if skills_score >= SELECTIVE_SKILL_FLOOR:
+        return (
+            ApplicationPool.selective,
+            f"Asks for {min_years} years but sets no hard floor, and the work fits your projects",
+        )
+    return (
+        ApplicationPool.deprioritized,
+        f"Asks for {min_years} years and the work is only a loose fit",
+    )
+
+
 def _check_auto_reject(
     analysis: dict,
     jd_text_lower: str,
@@ -140,23 +256,16 @@ def _check_auto_reject(
     if sponsorship_status == "no_sponsor" and not reasons:
         reasons.append("AI detected no-sponsorship language")
 
-    # 2. Too senior
+    # 2. Years experience out of reach. Only an explicit 5+ floor rejects outright;
+    # senior-sounding titles and 2-4 year asks are sorted into the deprioritized pool
+    # by classify_pool instead, since a title alone is a poor guide to who gets hired.
+    min_years, _, _ = _experience_signals(analysis)
+    if min_years is not None and min_years >= HARD_REJECT_YEARS:
+        reasons.append(f"Requires {min_years}+ years of experience")
+
     title_lower = (analysis.get("title") or "").lower()
-    for kw in settings.SENIOR_LEVEL_KEYWORDS:
-        if kw in title_lower:
-            reasons.append(f"Role is too senior: '{kw}' in title")
-            break
 
-    level = analysis.get("level", "unknown")
-    if level in ("senior", "staff", "principal", "manager") and not any("senior" in r for r in reasons):
-        reasons.append(f"Role level is '{level}', too senior for entry-level search")
-
-    # 3. Years experience too high
-    years_min = analysis.get("years_experience", {}).get("min") or 0
-    if years_min >= 4:
-        reasons.append(f"Requires {years_min}+ years of experience")
-
-    # 4. Gated to a graduating-student cohort, not open to candidates who already
+    # 3. Gated to a graduating-student cohort, not open to candidates who already
     # graduated. Title phrasing is trusted directly; body text only counts when it's
     # an unambiguous eligibility-window statement (body text often just says "new
     # grad" to redirect actual new grads to a *different* posting, not to gate this one).
@@ -223,28 +332,29 @@ def _score_h1b(
     return min(score, 30.0)
 
 
-def _score_level(analysis: dict) -> float:
-    """Level match score (max 20). Ideal = entry-level, 0-2 years."""
-    level = analysis.get("level", "unknown")
-    years_min = analysis.get("years_experience", {}).get("min") or 0
-    years_max = analysis.get("years_experience", {}).get("max") or 99
+def _score_level(analysis: dict, pool: ApplicationPool) -> float:
+    """Level match score (max 20), graded within the role's effort pool.
 
-    # Perfect match: intern, entry, or clearly entry-level junior
-    if level in ("intern", "entry"):
-        return 20.0
-    if level == "junior" and years_max <= 3:
-        return 17.0
-    if level == "unknown" and years_max <= 2:
-        return 18.0
-    if level == "unknown" and years_max <= 3:
-        return 14.0
-    if level == "junior":
-        return 12.0
-    if level == "mid" and years_min <= 2:
-        return 8.0
-    if level == "mid":
-        return 4.0
-    return 0.0
+    The pool already encodes the decision (apply / look closer / leave alone), so this
+    just spreads roles inside it — a deprioritized role scores low enough that it drops
+    out of the apply and maybe bands on its own, without being hidden outright.
+    """
+    level = analysis.get("level", "unknown")
+    min_years, internship_ok, _ = _experience_signals(analysis)
+
+    if pool == ApplicationPool.primary:
+        if level in ("intern", "entry"):
+            return 20.0
+        if min_years is not None and min_years <= 2:
+            return 18.0
+        if internship_ok:
+            return 17.0
+        return 16.0
+
+    if pool == ApplicationPool.selective:
+        return 10.0 if min_years is None else 8.0
+
+    return 0.0 if _senior_signal(analysis) else 3.0
 
 
 def _score_skills(
@@ -334,6 +444,8 @@ def compute_score(
     if is_rejected:
         result.is_auto_rejected = True
         result.auto_reject_reasons = reject_reasons
+        result.pool = ApplicationPool.deprioritized
+        result.pool_reason = reject_reasons[0]
         return result
 
     # --- H-1B score ---
@@ -344,15 +456,16 @@ def compute_score(
         company_swe_filings=company_swe_filings,
     )
 
-    # --- Level score ---
-    result.level = _score_level(analysis)
-
-    # --- Skills score ---
+    # --- Skills score (first: the pool's "does the work actually fit" test reads it) ---
     result.skills = _score_skills(
         required_skills=analysis.get("required_skills", []),
         tech_stack=analysis.get("tech_stack", []),
         resume_matched_skills=resume_matched_skills or [],
     )
+
+    # --- Effort pool + level score ---
+    result.pool, result.pool_reason = classify_pool(analysis, result.skills)
+    result.level = _score_level(analysis, result.pool)
 
     # --- Location score ---
     result.location = _score_location(

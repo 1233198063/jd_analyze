@@ -10,6 +10,12 @@ export const jobsApi = {
   getCoverLetter: (id) => client.get(`/jobs/${id}/cover-letter`).then((r) => r.data),
   getInterviewAnswer: (id, question) =>
     client.post(`/jobs/${id}/interview-answer`, { question }).then((r) => r.data),
+  getResumePick: (id) => client.get(`/jobs/${id}/resume-pick`).then((r) => r.data),
+  getResumeRevision: (id) => client.get(`/jobs/${id}/resume-revision`).then((r) => r.data),
+  generateResumeRevision: (id, resumeId) =>
+    client
+      .post(`/jobs/${id}/resume-revision`, null, { params: resumeId ? { resume_id: resumeId } : {} })
+      .then((r) => r.data),
   tailorResume: (id) => client.post(`/jobs/${id}/tailor-resume`).then((r) => r.data),
   getTailoredResume: (id) => client.get(`/jobs/${id}/tailor-resume`).then((r) => r.data),
   // Streams raw text chunks from the tailor-resume protocol (===RESUME===...===META===...===END===).

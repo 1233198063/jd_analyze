@@ -33,6 +33,27 @@ export function RecommendationBadge({ recommendation, score }) {
   return <Badge variant="gray">Skip — {score?.toFixed(0)}/100</Badge>;
 }
 
+export const POOL_LABELS = {
+  primary: "Primary",
+  selective: "Selective",
+  deprioritized: "Low priority",
+};
+
+/** Which effort pool a role sits in — the headline call, so it leads the badge row. */
+export function PoolBadge({ pool, reason }) {
+  if (!pool || !POOL_LABELS[pool]) return null;
+  const variant = pool === "primary" ? "green" : pool === "selective" ? "yellow" : "gray";
+  const icon = pool === "primary" ? "target" : pool === "selective" ? "search" : "schedule";
+  return (
+    <span title={reason || undefined}>
+      <Badge variant={variant}>
+        <Icon name={icon} size={12} className="mr-1" />
+        {POOL_LABELS[pool]}
+      </Badge>
+    </span>
+  );
+}
+
 export function LevelBadge({ level }) {
   const colors = {
     intern: "blue",

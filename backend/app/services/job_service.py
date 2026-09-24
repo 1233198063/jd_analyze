@@ -2,6 +2,7 @@
 Orchestrates: scrape → AI parse → company lookup → score → persist.
 """
 from __future__ import annotations
+import asyncio
 import re
 from datetime import datetime
 from uuid import UUID
@@ -13,24 +14,63 @@ from app.models.job import Job, JobAnalysis, ResumeMatchScore, ResumeTailoring, 
 from app.models.company import Company
 from app.models.resume import Resume
 from app.schemas.job import JobCreate
-from app.services import ai_parser, scorer
+from app.services import ai_parser, scorer, resume_pick
 from app.services.jd_scraper import fetch_jd_from_url
 from app.services.skills import extract_skills_from_text
 
 
+async def get_master_resumes(db: AsyncSession) -> list[Resume]:
+    """Every master resume, oldest first. There is normally one per track."""
+    result = await db.execute(
+        select(Resume).where(Resume.is_master == True).order_by(Resume.created_at)
+    )
+    return list(result.scalars().all())
+
+
 async def _get_master_resume(db: AsyncSession) -> Resume | None:
-    result = await db.execute(select(Resume).where(Resume.is_master == True).limit(1))
-    return result.scalar_one_or_none()
+    """A single master, for the features that can only work with one document."""
+    masters = await get_master_resumes(db)
+    return masters[0] if masters else None
 
 
-def resume_skills_for_scoring(resume: Resume | None) -> list[str]:
-    """Canonical skills for a resume, always re-derived from its text.
+async def resume_for_job(db: AsyncSession, job: Job) -> Resume | None:
+    """The master resume this JD should be worked against.
+
+    Anything written per-job — cover letter, interview answers, a tailored rewrite —
+    should start from the resume actually being sent, not whichever master is first.
+    """
+    masters = await get_master_resumes(db)
+    if not masters:
+        return None
+    if not job.analysis:
+        return masters[0]
+
+    pick = resume_pick.pick_resume(job.analysis.raw_ai_response, masters)
+    chosen_id = pick["recommended"]["resume_id"] if pick else None
+    return next((m for m in masters if str(m.id) == chosen_id), masters[0])
+
+
+def resume_skills_for_scoring(resume: Resume | list[Resume] | None) -> list[str]:
+    """Canonical skills, always re-derived from resume text.
 
     The stored `resumes.skills` column is a snapshot taken when the resume was
     saved, so it silently goes stale whenever the alias table in services.skills
     grows — and a stale list under-counts resume/JD overlap in every score.
+
+    Given several masters it returns their union: they are different weightings of one
+    person's experience, so "can this candidate do the job" has to consider all of it.
+    Which document to actually send is a separate question — see services.resume_pick.
     """
-    return extract_skills_from_text(resume.raw_text) if resume else []
+    if resume is None:
+        return []
+    resumes = resume if isinstance(resume, list) else [resume]
+
+    seen: list[str] = []
+    for r in resumes:
+        for skill in extract_skills_from_text(r.raw_text):
+            if skill not in seen:
+                seen.append(skill)
+    return seen
 
 
 def _normalize_company_name(name: str) -> str:
@@ -58,6 +98,8 @@ def _apply_breakdown(score: ResumeMatchScore, breakdown) -> None:
     score.score_product = breakdown.product
     score.is_auto_rejected = breakdown.is_auto_rejected
     score.auto_reject_reasons = breakdown.auto_reject_reasons
+    score.application_pool = breakdown.pool.value
+    score.application_pool_reason = breakdown.pool_reason
     score.recommendation = breakdown.recommendation
     score.recommendation_reason = breakdown.recommendation_reason
 
@@ -108,7 +150,8 @@ async def create_job_and_analyze(
         raise ValueError("No job description text provided and URL scraping failed.")
 
     # Step 2: AI parse
-    ai_data = ai_parser.parse_job_description(raw_text)
+    # AI calls shell out to Codex and can take a while — keep them off the event loop.
+    ai_data = await asyncio.to_thread(ai_parser.parse_job_description, raw_text)
 
     if not ai_data.get("title") and not ai_data.get("company_name") \
             and not ai_data.get("tech_stack") and not ai_data.get("required_skills"):
@@ -120,9 +163,17 @@ async def create_job_and_analyze(
     # Step 3: company lookup
     company = await _get_company(db, ai_data.get("company_name"))
 
-    # Step 4: master resume skills for scoring
-    resume = await _get_master_resume(db)
-    resume_skills = resume_skills_for_scoring(resume)
+    # Step 4: skills for scoring — the union across every master resume. The AI gap
+    # analysis in step 6 runs against the one version this JD would actually be sent.
+    masters = await get_master_resumes(db)
+    resume_skills = resume_skills_for_scoring(masters)
+
+    pick = resume_pick.pick_resume(ai_data, masters)
+    resume = (
+        next((m for m in masters if str(m.id) == pick["recommended"]["resume_id"]), masters[0])
+        if pick
+        else None
+    )
 
     # Step 5: compute score
     breakdown = scorer.compute_score(
@@ -138,7 +189,7 @@ async def create_job_and_analyze(
     # Step 6: AI resume scoring (only if not auto-rejected and resume exists)
     ai_score_data: dict = {}
     if not breakdown.is_auto_rejected and resume:
-        ai_score_data = ai_parser.score_resume_vs_job(resume.raw_text, ai_data)
+        ai_score_data = await asyncio.to_thread(ai_parser.score_resume_vs_job, resume.raw_text, ai_data)
 
     # Step 7: persist
     job = Job(
@@ -165,6 +216,9 @@ async def create_job_and_analyze(
         level=_map_level(ai_data.get("level", "unknown")),
         years_min=years.get("min"),
         years_max=years.get("max"),
+        min_years_experience=ai_data.get("min_years_experience"),
+        years_requirement_is_hard=ai_data.get("years_requirement_is_hard"),
+        internship_experience_accepted=ai_data.get("internship_experience_accepted"),
         location=ai_data.get("location"),
         is_remote=ai_data.get("is_remote", False),
         is_hybrid=ai_data.get("is_hybrid", False),
@@ -199,6 +253,8 @@ async def create_job_and_analyze(
         score_product=breakdown.product,
         is_auto_rejected=breakdown.is_auto_rejected,
         auto_reject_reasons=breakdown.auto_reject_reasons,
+        application_pool=breakdown.pool.value,
+        application_pool_reason=breakdown.pool_reason,
         missing_keywords=ai_score_data.get("missing_keywords", []),
         missing_evidence=ai_score_data.get("missing_evidence", []),
         recommended_bullets=ai_score_data.get("recommended_bullets", []),
@@ -260,8 +316,9 @@ async def rescore_all_jobs(db: AsyncSession) -> dict:
     on each match score is left alone, so this needs no API calls. Use it after
     editing the master resume or changing scoring rules.
     """
-    resume = await _get_master_resume(db)
-    resume_skills = resume_skills_for_scoring(resume)
+    masters = await get_master_resumes(db)
+    resume = masters[0] if masters else None
+    resume_skills = resume_skills_for_scoring(masters)
 
     companies = (await db.execute(select(Company))).scalars().all()
     by_name = {c.name_normalized: c for c in companies}
@@ -343,11 +400,11 @@ async def generate_resume_tailoring(db: AsyncSession, job_id: UUID) -> ResumeTai
     if not job.analysis:
         raise ValueError("Job not yet analyzed")
 
-    resume = await _get_master_resume(db)
+    resume = await resume_for_job(db, job)
     if not resume:
         raise ValueError("No master resume set — add one on the Resume page first")
 
-    ai_data = ai_parser.tailor_resume(resume.raw_text, job.analysis.raw_ai_response)
+    ai_data = await asyncio.to_thread(ai_parser.tailor_resume, resume.raw_text, job.analysis.raw_ai_response)
 
     tailoring = ResumeTailoring(
         job_id=job.id,

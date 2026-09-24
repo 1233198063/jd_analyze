@@ -25,18 +25,14 @@ def _to_out(resume: Resume) -> ResumeOut:
 
 @router.post("/", response_model=ResumeOut)
 async def create_resume(payload: ResumeCreate, db: AsyncSession = Depends(get_db)):
-    # If marking as master, unset existing master
-    if payload.is_master:
-        result = await db.execute(select(Resume).where(Resume.is_master == True))
-        for existing in result.scalars().all():
-            existing.is_master = False
-            db.add(existing)
-
+    # Several resumes can be masters at once — one per track (frontend / full-stack),
+    # all describing the same real experience — so marking one no longer demotes the rest.
     skills = _extract_skills(payload.raw_text)
 
     resume = Resume(
         name=payload.name,
         is_master=payload.is_master,
+        track=payload.track,
         raw_text=payload.raw_text,
         skills=skills,
         parsed_sections={},
@@ -75,13 +71,6 @@ async def update_resume(resume_id: UUID, payload: ResumeUpdate, db: AsyncSession
     resume = result.scalar_one_or_none()
     if not resume:
         raise HTTPException(status_code=404, detail="Resume not found")
-
-    if payload.is_master:
-        existing = await db.execute(select(Resume).where(Resume.is_master == True))
-        for r in existing.scalars().all():
-            if r.id != resume_id:
-                r.is_master = False
-                db.add(r)
 
     for field, value in payload.model_dump(exclude_none=True).items():
         setattr(resume, field, value)

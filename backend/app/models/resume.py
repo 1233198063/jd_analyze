@@ -12,7 +12,10 @@ class Resume(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # More than one resume can be a master: the same real experience, weighted for a
+    # different kind of role. `track` is what picks between them for a given JD.
     is_master: Mapped[bool] = mapped_column(Boolean, default=False)
+    track: Mapped[str | None] = mapped_column(String(20))  # frontend | fullstack | None
     raw_text: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Parsed sections: {summary, experience: [...], education: [...], projects: [...]}

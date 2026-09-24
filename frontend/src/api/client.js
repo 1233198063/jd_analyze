@@ -3,7 +3,7 @@ import axios from "axios";
 const client = axios.create({
   baseURL: "/api/v1",
   headers: { "Content-Type": "application/json" },
-  timeout: 60_000, // AI calls can take a while
+  timeout: 300_000, // AI runs through local Codex; adding a JD alone chains two ~15-40s calls
 });
 
 client.interceptors.response.use(

@@ -53,6 +53,9 @@ class JobAnalysisOut(BaseModel):
     level: JobLevel
     years_min: Optional[int]
     years_max: Optional[int]
+    min_years_experience: Optional[int] = None
+    years_requirement_is_hard: Optional[bool] = None
+    internship_experience_accepted: Optional[bool] = None
     location: Optional[str]
     is_remote: bool
     is_hybrid: bool
@@ -98,6 +101,8 @@ class ResumeMatchScoreOut(BaseModel):
     score_product: float
     is_auto_rejected: bool
     auto_reject_reasons: list[str]
+    application_pool: Optional[str] = None
+    application_pool_reason: Optional[str] = None
     missing_keywords: list[str]
     missing_evidence: list[dict]
     recommended_bullets: list[dict]
@@ -177,6 +182,7 @@ class JobListItem(BaseModel):
     overall_score: Optional[float] = None
     recommendation: Optional[Recommendation] = None
     is_auto_rejected: Optional[bool] = None
+    application_pool: Optional[str] = None
     sponsorship_status: Optional[SponsorshipStatus] = None
     application_status: Optional[str] = None
 

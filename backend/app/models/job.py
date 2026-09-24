@@ -42,6 +42,18 @@ class Recommendation(str, enum.Enum):
     auto_reject = "auto_reject"
 
 
+class ApplicationPool(str, enum.Enum):
+    """How much effort a role is worth, independent of its raw score.
+
+    Stored as a plain string column rather than a Postgres ENUM: the pool taxonomy
+    tracks an evolving job-search strategy, and adding a member to a native enum
+    needs a manual ALTER TYPE against every existing database.
+    """
+    primary = "primary"            # Junior / Associate / Early Career, or <=2y, or <=3y with internships counted
+    selective = "selective"        # 2-4y with no hard year floor, or years unstated — worth a look if the work fits
+    deprioritized = "deprioritized"  # Senior / Staff / Lead titles, or a hard 2-4y floor
+
+
 class Job(Base):
     __tablename__ = "jobs"
 
@@ -77,6 +89,13 @@ class JobAnalysis(Base):
     level: Mapped[JobLevel] = mapped_column(Enum(JobLevel), default=JobLevel.unknown)
     years_min: Mapped[int | None] = mapped_column(Integer)
     years_max: Mapped[int | None] = mapped_column(Integer)
+
+    # Experience requirements, extracted independently of the title — a role with no
+    # "Junior" in its name can still be open to early-career candidates.
+    # All three are null on analyses parsed before these fields existed.
+    min_years_experience: Mapped[int | None] = mapped_column(Integer)
+    years_requirement_is_hard: Mapped[bool | None] = mapped_column(Boolean)
+    internship_experience_accepted: Mapped[bool | None] = mapped_column(Boolean)
 
     location: Mapped[str | None] = mapped_column(String(255))
     is_remote: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -135,6 +154,10 @@ class ResumeMatchScore(Base):
     is_auto_rejected: Mapped[bool] = mapped_column(Boolean, default=False)
     auto_reject_reasons: Mapped[list] = mapped_column(JSONB, default=list)
 
+    # Which effort pool this role falls into (see ApplicationPool)
+    application_pool: Mapped[str] = mapped_column(String(20), default=ApplicationPool.selective.value)
+    application_pool_reason: Mapped[str | None] = mapped_column(Text)
+
     # Resume gap analysis
     missing_keywords: Mapped[list] = mapped_column(JSONB, default=list)
     missing_evidence: Mapped[list] = mapped_column(JSONB, default=list)
@@ -181,3 +204,32 @@ class ResumeTailoring(Base):
 
     job: Mapped["Job"] = relationship("Job", back_populates="tailorings")
     resume: Mapped["Resume | None"] = relationship("Resume")
+
+
+class ResumeRevision(Base):
+    """The chosen master resume, revised for one JD to cover as many of its keywords as the
+    candidate's real experience supports — free to reword, reorder, merge or cut, never to
+    add experience the original doesn't show.
+    """
+    __tablename__ = "resume_revisions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="CASCADE"))
+    resume_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("resumes.id", ondelete="SET NULL"), nullable=True)
+
+    revised_text: Mapped[str] = mapped_column(Text)
+    # [{section, change, keywords, evidence}] — evidence quotes the ORIGINAL line that makes the change true
+    changes: Mapped[list] = mapped_column(JSONB, default=list)
+    # [{keyword, status: already_covered | added | missing, note}]
+    keyword_coverage: Mapped[list] = mapped_column(JSONB, default=list)
+    # Numbers in the revision that never appear in the original — a mechanical check for invented metrics
+    new_numbers: Mapped[list] = mapped_column(JSONB, default=list)
+
+    # True when the JD leans on skills the candidate has never used — i.e. not a primary target
+    is_stretch: Mapped[bool] = mapped_column(Boolean, default=False)
+    stretch_reason: Mapped[str | None] = mapped_column(Text)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    job: Mapped["Job"] = relationship("Job")
+    resume: Mapped["Resume | None"] = relationship("Resume", foreign_keys=[resume_id])
