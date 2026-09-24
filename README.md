@@ -11,13 +11,15 @@ An AI-powered job search tool built for international students on OPT/STEM OPT n
   | Dimension | Weight |
   |-----------|--------|
   | H-1B / OPT / STEM OPT friendliness | 30 |
-  | Level match (entry-level, 0–2 yrs) | 20 |
+  | Level match (by application pool) | 20 |
   | Skill match (React / TS / Python / SQL / AI) | 20 |
   | Location (Bay Area preferred) | 10 |
   | Company size & stability | 10 |
   | Product direction fit | 10 |
 
-- **Hard Reject Filters** — Auto-rejects roles with "not eligible for immigration sponsorship", 4+ years required, senior/staff/lead/principal titles, or security clearance requirements.
+- **Hard Reject Filters** — Auto-rejects roles outside the US, roles that won't sponsor visas or need a security clearance, roles that explicitly require 5+ years, and postings reserved for a new-grad cohort.
+- **Application Pools** — Every remaining role is sorted by experience requirements rather than title alone: **primary** (junior / early-career, ≤2 years, or ≤3 when internships count), **selective** (2–4 years with no hard floor and a strong skill fit), or **deprioritized** (senior-track titles or a hard 2–4 year floor). Deprioritized roles stay visible but score lower instead of being hidden.
+- **Two Resume Tracks** — Keep one master resume per track (Frontend, Product / Full-Stack). A rule-based picker recommends which to send for each job, and an AI revision rewrites the chosen one to cover as many of the job's keywords as your real experience supports — never inventing experience — with a keyword-coverage report and a check for any number not in the original.
 - **Resume Match & Gap Analysis** — Upload your master resume. AI identifies missing keywords and evidence gaps per job, then the Resume Gaps page aggregates gaps across your whole job history (or just the roles you applied to) so you know what to learn first — with a lightweight reading-list tracker (want to read / reading / finished + notes) per skill.
 - **AI Resume Tailoring** — Rewrites your master resume for one specific JD without inventing experience: side-by-side diff, clean, and editable views; keyword coverage tracking; honest suggestions for folding a missing skill into an existing project (with an honesty note on what you must be able to speak to); interview trade-off talking points for notable tech choices; and a separate learning-gap list for anything that can't be honestly claimed. Exports to a one-page A4 PDF (auto-shrinks to fit).
 - **AI Cover Letter Drafts** — Generates a resume-grounded cover letter draft per job, ready to copy.
@@ -35,7 +37,7 @@ An AI-powered job search tool built for international students on OPT/STEM OPT n
 | Frontend | React 18, Vite, Tailwind CSS, TanStack Query, React Router v6 |
 | Backend | Python 3.11, FastAPI, SQLAlchemy (async), Alembic |
 | Database | PostgreSQL 16 |
-| AI | OpenAI GPT-4o |
+| AI | Local Codex CLI (`codex exec`, signed in with a ChatGPT account; default model `gpt-6-sol`) |
 | Task Queue | Celery + Redis (optional, for background processing) |
 | Scraping | httpx + BeautifulSoup4 |
 | Charts | Recharts |
@@ -89,7 +91,7 @@ Conventions:
 - Python 3.11+
 - Node.js 20+
 - PostgreSQL 16
-- OpenAI API key
+- Codex CLI or the Codex desktop app, signed in with a ChatGPT account (`codex login`). No OpenAI API key is needed: AI features use your ChatGPT plan's Codex usage.
 
 ### 1. Clone and configure
 
@@ -98,7 +100,7 @@ git clone https://github.com/your-username/jd-analyze.git
 cd jd-analyze
 
 cp backend/.env.example backend/.env
-# Edit backend/.env and fill in your OPENAI_API_KEY and DATABASE_URL
+# Edit backend/.env and set DATABASE_URL (the CODEX_* settings have working defaults)
 ```
 
 ### 2. Set up the database
@@ -165,7 +167,10 @@ The system normalizes company names, computes approval rates, and identifies SWE
 | Variable | Description |
 |----------|-------------|
 | `DATABASE_URL` | PostgreSQL async connection string |
-| `OPENAI_API_KEY` | OpenAI API key (GPT-4o) |
+| `CODEX_PATH` | Path to `codex`/`codex.exe`. Leave empty to auto-detect it from your PATH or the Codex desktop app |
+| `CODEX_MODEL` | Model for all AI calls (default `gpt-6-sol`; `gpt-6-luna` is faster, `gpt-6-astra` is stronger but slower) |
+| `CODEX_REASONING_EFFORT` | Codex reasoning effort (default `low`) |
+| `CODEX_TIMEOUT_SECONDS` | Max seconds per AI call (default `240`) |
 | `REDIS_URL` | Redis URL (only needed if running Celery worker) |
 | `SECRET_KEY` | JWT signing secret |
 | `ALGORITHM` | JWT signing algorithm (default `HS256`) |
@@ -176,6 +181,7 @@ The system normalizes company names, computes approval rates, and identifies SWE
 ## Troubleshooting (local dev on Windows)
 
 - **A page loads forever, but the API answers fine with `curl`.** On Windows, uvicorn cuts off responses larger than about 128 KB (at exactly 130,560 bytes) when the request asks to close the connection. Vite's proxy does that by default, so `frontend/vite.config.js` gives the proxy a keep-alive agent to avoid it. Don't remove that agent. To check whether this is the cause, compare `curl -H "Connection: close" <backend url>` with a plain `curl`, and look for `http proxy error … ECONNRESET` in the Vite output.
+- **AI features fail with `Codex CLI not found` or `codex exec failed`.** The backend runs `codex exec` for every AI call. If `codex` isn't on your PATH, the backend uses the newest copy the Codex desktop app keeps under `%LOCALAPPDATA%\OpenAI\Codex\bin\<hash>\codex.exe`; that folder name changes whenever the app updates. Run `codex login status` with that binary to confirm you're signed in, or set `CODEX_PATH` in `backend/.env`. AI calls count against your ChatGPT plan's Codex usage limits, so a big discovery run (two calls per new posting) can use a noticeable share.
 - **Backend edits don't seem to take effect.** `uvicorn --reload` can log `Reloading...` without ever starting a new worker, so the old code keeps serving requests. If the log never shows `Application startup complete` again, stop uvicorn and start it again manually.
 
 ## License

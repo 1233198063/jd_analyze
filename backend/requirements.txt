@@ -8,7 +8,6 @@ pydantic-settings==2.6.1
 python-dotenv==1.0.1
 
 # AI
-openai==1.57.4
 
 # HTTP / scraping
 httpx==0.28.1

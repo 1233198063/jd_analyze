@@ -105,7 +105,7 @@ export default function AddJob() {
       <div className="mt-4 card p-4 bg-petrol-50 border-petrol-200">
         <p className="text-xs font-medium text-petrol-700 mb-1">What happens next</p>
         <ul className="text-xs text-petrol-600 space-y-0.5 list-disc list-inside">
-          <li>Claude AI parses title, level, skills, tech stack, salary</li>
+          <li>AI (via Codex) parses title, level, skills, tech stack, salary</li>
           <li>Sponsorship language detected and H-1B risk scored</li>
           <li>Hard-reject filters applied (no sponsor, 4+ years, senior roles)</li>
           <li>Resume match scored across 6 dimensions (100 pts total)</li>

@@ -164,7 +164,7 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
 
       {isStreaming && (
         <p className="text-xs text-ink/40 mt-3">
-          Streaming live from the AI — the preview below fills in as it writes...
+          Codex is rewriting your resume — it appears below when it&apos;s done (usually about a minute)...
         </p>
       )}
 
@@ -234,7 +234,7 @@ export default function ResumeTailorPanel({ jobId, jobTitle }) {
                   </div>
                   <div>
                     <p className="text-xs font-medium text-ink/55 mb-1">
-                      Tailored{isStreaming && " (writing live...)"}
+                      Tailored{isStreaming && " (generating...)"}
                     </p>
                     <div className="max-h-[32rem] overflow-y-auto bg-canvas border border-mist rounded-lg p-3">
                       <ResumePreview lines={diffNewLines} className="shadow-none" />

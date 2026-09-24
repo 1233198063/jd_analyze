@@ -15,6 +15,7 @@ export default function ResumePage() {
   const [name, setName] = useState("");
   const [rawText, setRawText] = useState("");
   const [isMaster, setIsMaster] = useState(false);
+  const [track, setTrack] = useState("");
   const [editId, setEditId] = useState(null);
   const [previewId, setPreviewId] = useState(null);
   const qc = useQueryClient();
@@ -58,6 +59,7 @@ export default function ResumePage() {
     setName("");
     setRawText("");
     setIsMaster(false);
+    setTrack("");
     setEditId(null);
   };
 
@@ -66,6 +68,7 @@ export default function ResumePage() {
     setName(r.name);
     setRawText(r.raw_text);
     setIsMaster(r.is_master);
+    setTrack(r.track || "");
     setShowForm(true);
   };
 
@@ -76,7 +79,7 @@ export default function ResumePage() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const payload = { name, raw_text: rawText, is_master: isMaster };
+    const payload = { name, raw_text: rawText, is_master: isMaster, track: track || null };
     if (editId) {
       update.mutate({ id: editId, payload });
     } else {
@@ -179,8 +182,22 @@ export default function ResumePage() {
               onChange={(e) => setIsMaster(e.target.checked)}
               className="rounded"
             />
-            <span className="text-sm text-ink/80">Set as master resume (used for scoring)</span>
+            <span className="text-sm text-ink/80">
+              Set as a master resume (scoring uses every master's skills)
+            </span>
           </label>
+
+          <div>
+            <label className="label">Track</label>
+            <select className="input w-64" value={track} onChange={(e) => setTrack(e.target.value)}>
+              <option value="">No track — never auto-recommended</option>
+              <option value="frontend">Frontend</option>
+              <option value="fullstack">Product / Full-Stack</option>
+            </select>
+            <p className="text-xs text-ink/40 mt-1">
+              Decides which version gets recommended for a given JD. Keep one master per track.
+            </p>
+          </div>
 
           <div className="flex gap-3">
             <button type="submit" className="btn-primary" disabled={create.isPending || update.isPending}>
@@ -200,6 +217,11 @@ export default function ResumePage() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="font-semibold text-ink truncate">{r.name}</p>
+                  {r.track && (
+                    <span className="text-xs bg-petrol-100 text-petrol-700 font-medium px-2 py-0.5 rounded-full">
+                      {r.track === "frontend" ? "Frontend" : "Product / Full-Stack"}
+                    </span>
+                  )}
                   {r.is_master && (
                     <span className="text-xs bg-bubblegum-400 text-ink font-medium px-2 py-0.5 rounded-full">Master</span>
                   )}

@@ -13,6 +13,7 @@ export function printElementAsPdf(elementId, filename) {
       #${elementId} {
         position: absolute; left: 0; top: 0; width: 210mm !important; height: 297mm !important;
         box-shadow: none !important; border: none !important; overflow: hidden !important;
+        transform: none !important; /* on-screen previews zoom the page down to fit their column */
       }
       @page { size: A4; margin: 0; }
     }

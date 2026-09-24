@@ -1,7 +1,10 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from uuid import UUID
 
 from app.core.database import get_db, AsyncSessionLocal
@@ -11,10 +14,13 @@ from app.schemas.resume import (
     CoverLetterOut,
     InterviewAnswerRequest,
     InterviewAnswerOut,
+    ResumePickOut,
+    ResumeCandidateOut,
+    ResumeRevisionOut,
 )
-from app.services import job_service, ai_parser
+from app.services import job_service, ai_parser, resume_pick
 from app.services.skills import normalize_skill_terms
-from app.models.job import Job, ResumeTailoring
+from app.models.job import Job, ResumeTailoring, ResumeRevision
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -70,6 +76,7 @@ async def list_jobs(
             overall_score=job.match_score.overall_score if job.match_score else None,
             recommendation=job.match_score.recommendation if job.match_score else None,
             is_auto_rejected=job.match_score.is_auto_rejected if job.match_score else None,
+            application_pool=job.match_score.application_pool if job.match_score else None,
             sponsorship_status=job.analysis.sponsorship_status if job.analysis else None,
             application_status=job.application.status.value if job.application else None,
         )
@@ -164,18 +171,18 @@ async def rescore_job(job_id: UUID, db: AsyncSession = Depends(get_db)):
     from app.services.job_service import (
         _apply_breakdown,
         _get_company,
-        _get_master_resume,
+        get_master_resumes,
         resume_skills_for_scoring,
     )
     from app.services.scorer import compute_score
 
-    resume = await _get_master_resume(db)
+    masters = await get_master_resumes(db)
     company = await _get_company(db, job.analysis.company_name)
 
     breakdown = compute_score(
         analysis=job.analysis.raw_ai_response,
         jd_text_lower=job.raw_text.lower(),
-        resume_matched_skills=resume_skills_for_scoring(resume),
+        resume_matched_skills=resume_skills_for_scoring(masters),
         company_h1b_total=company.h1b_total_filings if company else 0,
         company_h1b_rate=company.h1b_approval_rate if company else None,
         company_swe_filings=company.h1b_swe_filings if company else 0,
@@ -220,7 +227,7 @@ async def tailor_resume_stream(job_id: UUID, db: AsyncSession = Depends(get_db))
     if not job.analysis:
         raise HTTPException(status_code=400, detail="Job not yet analyzed")
 
-    resume = await job_service._get_master_resume(db)
+    resume = await job_service.resume_for_job(db, job)
     if not resume:
         raise HTTPException(status_code=400, detail="No master resume set — add one on the Resume page first")
 
@@ -231,7 +238,8 @@ async def tailor_resume_stream(job_id: UUID, db: AsyncSession = Depends(get_db))
     async def event_stream():
         chunks: list[str] = []
         try:
-            for piece in ai_parser.tailor_resume_stream(resume_text, job_analysis):
+            pieces = await asyncio.to_thread(list, ai_parser.tailor_resume_stream(resume_text, job_analysis))
+            for piece in pieces:
                 chunks.append(piece)
                 yield piece
         except Exception as e:
@@ -261,6 +269,99 @@ async def tailor_resume_stream(job_id: UUID, db: AsyncSession = Depends(get_db))
     return StreamingResponse(event_stream(), media_type="text/plain")
 
 
+def _candidate(row: dict | None) -> ResumeCandidateOut | None:
+    return ResumeCandidateOut(**row) if row else None
+
+
+@router.get("/{job_id}/resume-pick", response_model=ResumePickOut)
+async def get_resume_pick(job_id: UUID, db: AsyncSession = Depends(get_db)):
+    """Which master resume to send for this job. Rule-based, so it costs nothing to show."""
+    job = await job_service.get_job_detail(db, job_id)
+    if not job or not job.analysis:
+        raise HTTPException(status_code=404, detail="Job or analysis not found")
+
+    masters = await job_service.get_master_resumes(db)
+    pick = resume_pick.pick_resume(job.analysis.raw_ai_response, masters)
+    if not pick:
+        return ResumePickOut(job_id=job_id, recommended=None, runner_up=None, reason=None, runner_up_reason=None)
+
+    return ResumePickOut(
+        job_id=job_id,
+        recommended=_candidate(pick["recommended"]),
+        runner_up=_candidate(pick["runner_up"]),
+        reason=pick["reason"],
+        runner_up_reason=pick["runner_up_reason"],
+        is_close_call=pick["is_close_call"],
+    )
+
+
+@router.get("/{job_id}/resume-revision", response_model=ResumeRevisionOut | None)
+async def get_resume_revision(job_id: UUID, db: AsyncSession = Depends(get_db)):
+    """The most recently generated revision for this job, if any."""
+    result = await db.execute(
+        select(ResumeRevision)
+        .options(selectinload(ResumeRevision.resume))
+        .where(ResumeRevision.job_id == job_id)
+        .order_by(ResumeRevision.created_at.desc())
+        .limit(1)
+    )
+    row = result.scalar_one_or_none()
+    if not row:
+        return None
+    out = ResumeRevisionOut.model_validate(row)
+    out.resume_name = row.resume.name if row.resume else None
+    return out
+
+
+@router.post("/{job_id}/resume-revision", response_model=ResumeRevisionOut)
+async def generate_resume_revision(
+    job_id: UUID, resume_id: UUID | None = None, db: AsyncSession = Depends(get_db)
+):
+    """Revise the recommended resume for this job, covering as many JD keywords as the
+    candidate's real experience supports. Pass `resume_id` to revise a specific resume instead.
+    """
+    job = await job_service.get_job_detail(db, job_id)
+    if not job or not job.analysis:
+        raise HTTPException(status_code=404, detail="Job or analysis not found")
+
+    masters = await job_service.get_master_resumes(db)
+    if not masters:
+        raise HTTPException(status_code=400, detail="No master resume set — add one on the Resume page first")
+
+    pick = resume_pick.pick_resume(job.analysis.raw_ai_response, masters)
+    chosen = next((r for r in masters if str(r.id) == str(resume_id)), None) if resume_id else None
+    if not chosen:
+        chosen = next((r for r in masters if str(r.id) == pick["recommended"]["resume_id"]), masters[0])
+
+    try:
+        data = await asyncio.to_thread(
+            ai_parser.revise_resume,
+            resume_text=chosen.raw_text,
+            resume_name=chosen.name,
+            job_analysis=job.analysis.raw_ai_response,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+
+    row = ResumeRevision(
+        job_id=job_id,
+        resume_id=chosen.id,
+        revised_text=data["revised_text"],
+        changes=data.get("changes", []),
+        keyword_coverage=data.get("keyword_coverage", []),
+        new_numbers=data["new_numbers"],
+        is_stretch=bool(data.get("is_stretch", False)),
+        stretch_reason=data.get("stretch_reason"),
+    )
+    db.add(row)
+    await db.flush()
+    await db.refresh(row)
+
+    out = ResumeRevisionOut.model_validate(row)
+    out.resume_name = chosen.name
+    return out
+
+
 @router.get("/{job_id}/referral", response_model=ReferralMessageOut)
 async def get_referral_message(job_id: UUID, db: AsyncSession = Depends(get_db)):
     job = await job_service.get_job_detail(db, job_id)
@@ -268,8 +369,7 @@ async def get_referral_message(job_id: UUID, db: AsyncSession = Depends(get_db))
         raise HTTPException(status_code=404, detail="Job or analysis not found")
 
     analysis = job.analysis
-    resume = await job_service._get_master_resume(db)
-    resume_skills = job_service.resume_skills_for_scoring(resume)
+    resume_skills = job_service.resume_skills_for_scoring(await job_service.get_master_resumes(db))
 
     skill_overlap = list(
         normalize_skill_terms(analysis.required_skills + analysis.tech_stack)
@@ -279,7 +379,8 @@ async def get_referral_message(job_id: UUID, db: AsyncSession = Depends(get_db))
     top_skills = ", ".join(resume_skills[:4]) if resume_skills else "React, TypeScript, Python"
 
     try:
-        referral_data = ai_parser.generate_referral_message(
+        referral_data = await asyncio.to_thread(
+            ai_parser.generate_referral_message,
             company_name=analysis.company_name or "the company",
             title=analysis.title or "Software Engineer",
             level=analysis.level.value,
@@ -307,14 +408,15 @@ async def get_cover_letter(job_id: UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Job or analysis not found")
 
     analysis = job.analysis
-    resume = await job_service._get_master_resume(db)
+    resume = await job_service.resume_for_job(db, job)
     if not resume:
         raise HTTPException(status_code=400, detail="No master resume set — add one on the Resume page first")
 
     key_requirements = (analysis.required_skills or []) + (analysis.tech_stack or [])
 
     try:
-        letter_data = ai_parser.generate_cover_letter(
+        letter_data = await asyncio.to_thread(
+            ai_parser.generate_cover_letter,
             resume_text=resume.raw_text,
             company_name=analysis.company_name or "the company",
             title=analysis.title or "Software Engineer",
@@ -348,14 +450,15 @@ async def get_interview_answer(
         raise HTTPException(status_code=404, detail="Job or analysis not found")
 
     analysis = job.analysis
-    resume = await job_service._get_master_resume(db)
+    resume = await job_service.resume_for_job(db, job)
     if not resume:
         raise HTTPException(status_code=400, detail="No master resume set — add one on the Resume page first")
 
     key_requirements = (analysis.required_skills or []) + (analysis.tech_stack or [])
 
     try:
-        result = ai_parser.generate_interview_answer(
+        result = await asyncio.to_thread(
+            ai_parser.generate_interview_answer,
             resume_text=resume.raw_text,
             company_name=analysis.company_name or "the company",
             title=analysis.title or "Software Engineer",

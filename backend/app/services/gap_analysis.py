@@ -94,9 +94,10 @@ async def analyze_resume_gaps(db: AsyncSession, scope: str = "all") -> dict:
     scope="all"     — every analyzed JD that wasn't hard-rejected
     scope="applied" — only jobs with an application record
     """
-    resume = (
-        await db.execute(select(Resume).where(Resume.is_master == True).limit(1))
-    ).scalar_one_or_none()
+    masters = (
+        await db.execute(select(Resume).where(Resume.is_master == True).order_by(Resume.created_at))
+    ).scalars().all()
+    resume = masters[0] if masters else None
     if not resume:
         return {
             "meta": {
@@ -114,7 +115,10 @@ async def analyze_resume_gaps(db: AsyncSession, scope: str = "all") -> dict:
 
     # Recompute from raw_text rather than trusting resume.skills: that column is a
     # snapshot taken at write time, so it goes stale whenever the alias table grows.
-    resume_skills = normalize_skill_terms(extract_skills_from_text(resume.raw_text))
+    # Pooled across every master — a skill only counts as a gap when no version has it.
+    resume_skills = normalize_skill_terms(
+        [skill for m in masters for skill in extract_skills_from_text(m.raw_text)]
+    )
 
     jobs = (
         await db.execute(
