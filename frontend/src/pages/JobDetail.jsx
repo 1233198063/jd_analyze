@@ -7,6 +7,7 @@ import { PageLoader } from "@/components/common/Loading";
 import ScoreRing, { ScoreBar } from "@/components/features/ScoreRing";
 import ResumeTailorPanel from "@/components/features/ResumeTailorPanel";
 import ResumePickPanel from "@/components/features/ResumePickPanel";
+import { readResumeDraft } from "@/components/features/ResumeEditExport";
 import InterviewAnswerPanel from "@/components/features/InterviewAnswerPanel";
 import ApplicationTimeline from "@/components/features/ApplicationTimeline";
 import Icon from "@/components/common/Icon";
@@ -66,11 +67,19 @@ export default function JobDetail() {
     enabled: coverLetterOpen,
   });
 
+  const [chosenResumeId, setChosenResumeId] = useState(null);
+
   const trackApp = useMutation({
-    mutationFn: (status) =>
-      data?.job?.application_id
-        ? applicationsApi.update(data.job.application_id, { status })
-        : applicationsApi.create({ job_id: jobId, status }),
+    mutationFn: (status) => {
+      // Applying records the version selected in the resume panel, as edited — what was sent.
+      const resumeFields =
+        status === "applied" && chosenResumeId
+          ? { resume_id: chosenResumeId, resume_snapshot: readResumeDraft(jobId, chosenResumeId) }
+          : {};
+      return data?.job?.application_id
+        ? applicationsApi.update(data.job.application_id, { status, ...resumeFields })
+        : applicationsApi.create({ job_id: jobId, status, ...resumeFields });
+    },
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["job", jobId] });
       qc.invalidateQueries({ queryKey: ["application", result?.id] });
@@ -357,7 +366,9 @@ export default function JobDetail() {
       </div>
 
       {/* Pick a resume, then revise it for this job's keywords — the default path */}
-      {!rejected && analysis && <ResumePickPanel jobId={jobId} jobTitle={analysis?.title} />}
+      {!rejected && analysis && (
+        <ResumePickPanel jobId={jobId} jobTitle={analysis?.title} onChosenChange={setChosenResumeId} />
+      )}
 
       {/* Full rewrite: the heavier option, folded away unless asked for */}
       {!rejected && analysis && (

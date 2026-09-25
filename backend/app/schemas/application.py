@@ -13,6 +13,9 @@ class ApplicationCreate(BaseModel):
     apply_url: Optional[str] = None
     # When this actually happened, if it wasn't today (e.g. logging a past application).
     event_date: Optional[datetime] = None
+    # The resume sent and, when known, the exact text of the version sent.
+    resume_id: Optional[UUID] = None
+    resume_snapshot: Optional[str] = None
 
 
 class ApplicationUpdate(BaseModel):
@@ -27,6 +30,8 @@ class ApplicationUpdate(BaseModel):
     # Dates the status change actually happened, when recorded after the fact.
     event_date: Optional[datetime] = None
     applied_at: Optional[datetime] = None
+    resume_id: Optional[UUID] = None
+    resume_snapshot: Optional[str] = None
 
 
 class TimelineEvent(BaseModel):
@@ -54,6 +59,8 @@ class ApplicationOut(BaseModel):
     timeline: list[dict]
     notes: Optional[str]
     apply_url: Optional[str]
+    resume_id: Optional[UUID] = None
+    resume_tailored: Optional[bool] = None
     created_at: datetime
     updated_at: datetime
 

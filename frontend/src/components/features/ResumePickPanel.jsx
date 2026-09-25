@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { jobsApi } from "@/api/jobs";
 import { resumeApi } from "@/api/resume";
 import Icon from "@/components/common/Icon";
-import ResumeEditExport from "./ResumeEditExport";
+import ResumeEditExport, { resumeDraftKey } from "./ResumeEditExport";
 import clsx from "clsx";
 
 const TRACK_LABELS = { frontend: "Frontend", fullstack: "Product / Full-Stack" };
@@ -128,7 +128,7 @@ function ChangeList({ changes }) {
  * of the JD's keywords as the candidate's real experience supports. The pick is rule-based
  * and free, so it renders immediately; only the revision costs an AI call.
  */
-export default function ResumePickPanel({ jobId, jobTitle }) {
+export default function ResumePickPanel({ jobId, jobTitle, onChosenChange }) {
   const qc = useQueryClient();
 
   const { data: pick, isLoading } = useQuery({
@@ -139,6 +139,11 @@ export default function ResumePickPanel({ jobId, jobTitle }) {
   // The recommendation is a suggestion, not a verdict — the JD may read differently to you.
   const [overrideId, setOverrideId] = useState(null);
   const chosenId = overrideId || pick?.recommended?.resume_id;
+
+  // Marking the job applied records whichever version is selected here.
+  useEffect(() => {
+    onChosenChange?.(chosenId || null);
+  }, [chosenId, onChosenChange]);
 
   // The pick only carries metadata; the editor needs the document itself.
   const { data: chosenResume } = useQuery({
@@ -265,7 +270,7 @@ export default function ResumePickPanel({ jobId, jobTitle }) {
       {chosenResume && (
         <ResumeEditExport
           originalText={chosenResume.raw_text}
-          storageKey={`resume-pick-edit:${jobId}:${chosenResume.id}`}
+          storageKey={resumeDraftKey(jobId, chosenResume.id)}
           jobTitle={jobTitle}
           suggestedText={revision?.resume_id === chosenResume.id ? revision.revised_text : null}
         />

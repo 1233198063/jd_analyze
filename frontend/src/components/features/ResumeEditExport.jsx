@@ -28,6 +28,13 @@ function readStored(key, fallback) {
   }
 }
 
+export const resumeDraftKey = (jobId, resumeId) => `resume-pick-edit:${jobId}:${resumeId}`;
+
+/** The version of this resume last left in the editor for this job — i.e. what gets sent. */
+export function readResumeDraft(jobId, resumeId) {
+  return readStored(resumeDraftKey(jobId, resumeId), null);
+}
+
 /**
  * Edit the master resume that was picked for this job, side by side with the original,
  * and export the result as a one-page A4 PDF. Starts from the AI revision when there is

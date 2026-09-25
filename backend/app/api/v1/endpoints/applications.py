@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from app.core.database import get_db
 from app.models.application import Application, ApplicationStatus
+from app.models.resume import Resume
 from app.schemas.application import (
     ApplicationCreate,
     ApplicationUpdate,
@@ -65,6 +66,30 @@ def _sync_milestone_dates(app: Application) -> None:
             app.rejected_at = when
 
 
+def _normalized(text: str) -> str:
+    return " ".join(text.split())
+
+
+async def _record_resume(
+    db: AsyncSession, app: Application, resume_id: UUID | None, snapshot: str | None
+) -> None:
+    """Attach the resume sent. Whether it was tailored is decided now, against the master as
+    it stands at send time — masters keep being edited, so a later comparison means nothing."""
+    if resume_id is None:
+        return
+    resume = await db.get(Resume, resume_id)
+    if not resume:
+        raise HTTPException(status_code=404, detail="Resume not found")
+    app.resume_id = resume.id
+    if snapshot and snapshot.strip():
+        app.resume_snapshot = snapshot
+        app.resume_tailored = _normalized(snapshot) != _normalized(resume.raw_text)
+    else:
+        # Recorded after the fact: which resume is known, the exact text sent isn't.
+        app.resume_snapshot = None
+        app.resume_tailored = None
+
+
 @router.post("/", response_model=ApplicationOut)
 async def create_application(payload: ApplicationCreate, db: AsyncSession = Depends(get_db)):
     # Check no duplicate
@@ -88,6 +113,7 @@ async def create_application(payload: ApplicationCreate, db: AsyncSession = Depe
         app.applied_at = when
     elif payload.status == ApplicationStatus.rejected:
         app.rejected_at = when
+    await _record_resume(db, app, payload.resume_id, payload.resume_snapshot)
 
     db.add(app)
     await db.flush()
@@ -111,9 +137,12 @@ async def update_application(app_id: UUID, payload: ApplicationUpdate, db: Async
             app.rejected_at = when
         app.timeline = [*(app.timeline or []), _timeline_event(payload.status, when)]
 
-    # event_date drives the timeline above rather than being a column of its own.
-    for field, value in payload.model_dump(exclude_none=True, exclude={"status", "event_date"}).items():
+    # event_date drives the timeline above rather than being a column of its own, and the
+    # resume fields need the tailored check, so neither is copied across verbatim.
+    excluded = {"status", "event_date", "resume_id", "resume_snapshot"}
+    for field, value in payload.model_dump(exclude_none=True, exclude=excluded).items():
         setattr(app, field, value)
+    await _record_resume(db, app, payload.resume_id, payload.resume_snapshot)
 
     db.add(app)
     await db.flush()
@@ -126,7 +155,7 @@ async def get_kanban(db: AsyncSession = Depends(get_db)):
     from app.models.job import Job
     result = await db.execute(
         select(Application)
-        .options(selectinload(Application.job))
+        .options(selectinload(Application.job), selectinload(Application.resume))
         .order_by(Application.updated_at.desc())
     )
     all_apps = result.scalars().all()
@@ -145,6 +174,9 @@ async def get_kanban(db: AsyncSession = Depends(get_db)):
             "rejected_at": app.rejected_at.isoformat() if app.rejected_at else None,
             "timeline": app.timeline or [],
             "status_since": (app.timeline or [{}])[-1].get("timestamp"),
+            "resume_id": str(app.resume_id) if app.resume_id else None,
+            "resume_name": app.resume.name if app.resume else None,
+            "resume_tailored": app.resume_tailored,
         }
         if app.status in by_status:
             by_status[app.status].append(item)
