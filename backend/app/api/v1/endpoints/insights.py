@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -5,11 +6,51 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.models.application import ApplicationInsight
 from app.models.skill_study import SkillStudy, StudyStatus
-from app.schemas.insights import ResumeGapReport, SkillStudyOut, SkillStudyUpsert
-from app.services import gap_analysis
+from app.schemas.insights import ApplicationInsightOut, ResumeGapReport, SkillStudyOut, SkillStudyUpsert
+from app.services import ai_parser, application_insights, gap_analysis
 
 router = APIRouter(prefix="/insights", tags=["insights"])
+
+
+@router.get("/applications")
+async def application_analysis(db: AsyncSession = Depends(get_db)):
+    """Outcomes by resume version, pool and role, plus the skill gaps behind rejected roles.
+    Deterministic, so it's free to load on every visit."""
+    return await application_insights.analyze_applications(db)
+
+
+@router.get("/applications/summary", response_model=ApplicationInsightOut | None)
+async def latest_application_summary(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(ApplicationInsight).order_by(ApplicationInsight.created_at.desc()).limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+@router.post("/applications/summary", response_model=ApplicationInsightOut)
+async def generate_application_summary(db: AsyncSession = Depends(get_db)):
+    """An AI write-up of the patterns in the analysis above and what to do about them."""
+    analysis = await application_insights.analyze_applications(db)
+    if analysis["rejected_count"] == 0:
+        raise HTTPException(status_code=400, detail="No rejections tracked yet — nothing to analyze.")
+    try:
+        summary = await asyncio.to_thread(
+            ai_parser.summarize_application_outcomes, application_insights.summary_input(analysis)
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+
+    row = ApplicationInsight(
+        sent_count=analysis["totals"]["sent"],
+        rejected_count=analysis["rejected_count"],
+        summary=summary,
+    )
+    db.add(row)
+    await db.flush()
+    await db.refresh(row)
+    return row
 
 
 @router.get("/resume-gaps", response_model=ResumeGapReport)

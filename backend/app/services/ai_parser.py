@@ -212,6 +212,39 @@ Return JSON only:
 }}"""
 
 
+APPLICATION_ANALYSIS_PROMPT = """You are a candid job-search coach reviewing one candidate's \
+application outcomes. The candidate is an international student on OPT looking for early-career \
+software roles in the US. Everything below was computed from their own application tracker — \
+reason ONLY from it.
+
+OUTCOME DATA (JSON):
+{analysis_json}
+
+Rules:
+- Every finding must rest on numbers or roles in the data, and cite them (e.g. "4 of 5 rejected \
+roles required Go"). No generic job-search advice.
+- A form rejection carries no reason. Never claim to know why a specific company said no.
+- Say plainly when the sample is too small to separate signal from chance. With fewer than about \
+10 rejections, frame findings as things to watch, not conclusions.
+- A skill gap only points at rejections if it is over-represented in rejected roles versus the \
+rest (see over_represented, rejected_share vs other_share). One that is just as common everywhere \
+is a general gap — say which is which.
+- Never suggest claiming experience the candidate doesn't have. Resume advice means presenting \
+real experience better; skill advice means actually building the skill.
+
+Return JSON only:
+{{
+  "headline": "one sentence: the single most useful takeaway",
+  "patterns": [{{"finding": "...", "evidence": "the specific numbers or roles it rests on"}}],
+  "skills_to_build": [{{"skill": "...", "why": "tie it to the rejected roles", "first_step": "a concrete way to start this week"}}],
+  "resume_actions": ["a specific, honest change to how the resumes present existing experience"],
+  "targeting_actions": ["which kinds of roles to apply to more or less, and why"],
+  "caveat": "one sentence on what this data cannot tell yet"
+}}
+
+At most 4 patterns, 4 skills_to_build, 3 resume_actions and 3 targeting_actions."""
+
+
 RESUME_REVISION_PROMPT = """You are an expert technical resume writer. Revise the candidate's \
 resume for ONE specific job so it covers as many of that job's keywords as their real experience \
 honestly supports. Rewrite as much as it takes: reword bullets in the job's own terminology, \
@@ -484,6 +517,16 @@ def generate_cover_letter(
             level=level,
             job_summary=job_summary or "(no summary available)",
             key_requirements=", ".join(key_requirements[:8]) or "(none listed)",
+        ),
+    )
+    return json.loads(raw)
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+def summarize_application_outcomes(analysis: dict) -> dict:
+    raw = _call(
+        APPLICATION_ANALYSIS_PROMPT.format(
+            analysis_json=json.dumps(analysis, indent=1, default=str)[:14000],
         ),
     )
     return json.loads(raw)

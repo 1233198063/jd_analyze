@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from uuid import UUID
 
 from app.models.skill_study import StudyStatus
 
@@ -80,3 +81,13 @@ class ResumeGapReport(BaseModel):
     by_role: list[RoleGapSummary]
     strengths: list[SkillStrength]
     reading_progress: ReadingProgress
+
+
+class ApplicationInsightOut(BaseModel):
+    id: UUID
+    sent_count: int
+    rejected_count: int
+    summary: dict
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

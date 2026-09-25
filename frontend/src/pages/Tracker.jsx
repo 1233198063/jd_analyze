@@ -1,8 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { applicationsApi } from "@/api/applications";
+import { resumeApi } from "@/api/resume";
 import { PageLoader } from "@/components/common/Loading";
 import Stamp, { STAMPS, stampLabel } from "@/components/features/Stamp";
+import TrackerAnalysis from "@/components/features/TrackerAnalysis";
 import Icon from "@/components/common/Icon";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -45,6 +47,9 @@ const REJECTION_REASONS = [
   { value: "interview_failed", label: "Interview Failed" },
   { value: "other", label: "Other" },
 ];
+
+const reasonLabel = (value) =>
+  REJECTION_REASONS.find((r) => r.value === value)?.label || "Reason not recorded";
 
 const SHORT_LABEL = {
   saved: "Saved",
@@ -192,7 +197,7 @@ function SearchBox({ value, onChange }) {
   );
 }
 
-function AppRow({ item, colStatus, terms = [] }) {
+function AppRow({ item, colStatus, terms = [], resumes = [] }) {
   const qc = useQueryClient();
 
   const update = useMutation({
@@ -200,6 +205,7 @@ function AppRow({ item, colStatus, terms = [] }) {
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["kanban"] });
       qc.invalidateQueries({ queryKey: ["application", result?.id] });
+      qc.invalidateQueries({ queryKey: ["application-analysis"] });
     },
   });
 
@@ -235,6 +241,31 @@ function AppRow({ item, colStatus, terms = [] }) {
         <div className="mt-1">
           <TimelineTrail timeline={item.timeline} />
         </div>
+
+        {colStatus !== "saved" && resumes.length > 0 && (
+          <div className="mt-1 flex items-center gap-1.5 text-xs">
+            <Icon name="description" size={13} className="text-ink/30" />
+            <select
+              className={clsx(
+                "bg-transparent border-0 p-0 text-xs cursor-pointer outline-none hover:text-ink",
+                item.resume_id ? "text-ink/60" : "text-ink/35"
+              )}
+              value={item.resume_id || ""}
+              onChange={(e) =>
+                e.target.value && update.mutate({ id: item.id, payload: { resume_id: e.target.value } })
+              }
+              aria-label="Resume sent"
+            >
+              {!item.resume_id && <option value="">Which resume did you send?</option>}
+              {resumes.map((r) => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </select>
+            {item.resume_tailored && (
+              <span className="px-1.5 py-0.5 rounded bg-petrol-50 text-petrol-600">tailored</span>
+            )}
+          </div>
+        )}
 
         {colStatus === "rejected" && (
           <select
@@ -296,10 +327,26 @@ export default function Tracker() {
     queryFn: applicationsApi.kanban,
   });
 
-  // Kept in the URL so opening a result and hitting Back returns to the same search.
+  const { data: resumes = [] } = useQuery({
+    queryKey: ["resumes"],
+    queryFn: resumeApi.list,
+  });
+
+  // Search and tab live in the URL, so opening a job and hitting Back returns to the same view.
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get("q") || "";
-  const setQuery = (q) => setSearchParams(q ? { q } : {}, { replace: true });
+  const view = searchParams.get("view") === "analysis" ? "analysis" : "list";
+  const setParam = (key, value) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (value) next.set(key, value);
+        else next.delete(key);
+        return next;
+      },
+      { replace: true }
+    );
+  const setQuery = (q) => setParam("q", q);
 
   if (isLoading) return <PageLoader />;
 
@@ -322,8 +369,8 @@ export default function Tracker() {
     .filter((col) => col.items.length > 0);
   const matchCount = activeStages.reduce((sum, col) => sum + col.items.length, 0);
 
-  return (
-    <div className="space-y-5">
+  const header = (
+    <>
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-ink">Application Tracker</h1>
@@ -336,8 +383,44 @@ export default function Tracker() {
             )}
           </p>
         </div>
-        {totalApps > 0 && <SearchBox value={query} onChange={setQuery} />}
+        {totalApps > 0 && view === "list" && <SearchBox value={query} onChange={setQuery} />}
       </div>
+
+      {totalApps > 0 && (
+        <div className="flex gap-1 p-1 bg-petrol-50 rounded-lg w-fit">
+          {[
+            ["list", "Applications", "view_agenda"],
+            ["analysis", "Analysis", "insights"],
+          ].map(([key, label, icon]) => (
+            <button
+              key={key}
+              onClick={() => setParam("view", key === "analysis" ? "analysis" : "")}
+              className={clsx(
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                view === key ? "bg-white shadow text-ink" : "text-ink/55 hover:text-ink/90"
+              )}
+            >
+              <Icon name={icon} size={14} />
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
+  if (view === "analysis" && totalApps > 0) {
+    return (
+      <div className="space-y-5">
+        {header}
+        <TrackerAnalysis resumes={resumes} reasonLabel={reasonLabel} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {header}
 
       {/* Pipeline overview — keeps every stage visible without a horizontal scroll */}
       <div className="card p-4">
@@ -373,21 +456,6 @@ export default function Tracker() {
         </p>
       )}
 
-      {/* Rejection insight */}
-      {!searching && rejected.length >= 3 && (
-        <div className="card p-4 bg-gold-50 border-gold-200">
-          <p className="text-sm font-medium text-gold-700 mb-1">Rejection Pattern Analysis</p>
-          <div className="flex flex-wrap gap-4 text-xs text-gold-700">
-            {REJECTION_REASONS.map((r) => {
-              const count = rejected.filter((i) => i.rejection_reason === r.value).length;
-              return count > 0 ? (
-                <span key={r.value}>{r.label}: <strong>{count}</strong></span>
-              ) : null;
-            })}
-          </div>
-        </div>
-      )}
-
       {!searching && <StampCollection kanban={kanban} />}
 
       {/* Stages stacked vertically */}
@@ -403,7 +471,7 @@ export default function Tracker() {
             <div className={clsx("w-1 flex-shrink-0", tint(col.status).bar)} />
             <div className={clsx("flex-1 min-w-0", tint(col.status).tint)}>
               {col.items.map((item) => (
-                <AppRow key={item.id} item={item} colStatus={col.status} terms={terms} />
+                <AppRow key={item.id} item={item} colStatus={col.status} terms={terms} resumes={resumes} />
               ))}
             </div>
           </div>

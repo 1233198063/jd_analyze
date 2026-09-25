@@ -68,7 +68,7 @@ def classify_role(title: str | None) -> str:
     return UNCLASSIFIED
 
 
-def _is_actionable_skill(term: str) -> bool:
+def is_actionable_skill(term: str) -> bool:
     """Filter out prose requirements and soft skills, keeping learnable technologies."""
     if term in GENERIC_REQUIREMENT_TERMS:
         return False
@@ -180,11 +180,11 @@ async def analyze_resume_gaps(db: AsyncSession, scope: str = "all") -> dict:
 
         required = {
             s for s in normalize_skill_terms(analysis.required_skills + analysis.tech_stack)
-            if _is_actionable_skill(s)
+            if is_actionable_skill(s)
         }
         nice = {
             s for s in normalize_skill_terms(analysis.nice_to_have_skills)
-            if _is_actionable_skill(s)
+            if is_actionable_skill(s)
         } - required
 
         for skill in required | nice:
