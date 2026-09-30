@@ -65,6 +65,16 @@ SKILL_SYNONYMS: dict[str, list[str]] = {
     "bash": ["shell scripting", "shell script"],
     "figma": [],
     "jira": [],
+    "redux": [],
+    "tanstack query": ["tanstack", "react query", "react-query"],
+    "sse": ["server-sent events", "server sent events"],
+    "websocket": ["websockets", "web socket", "web sockets"],
+    "jest": [],
+    "vitest": [],
+    "playwright": [],
+    "terraform": [],
+    "github actions": [],
+    "opentelemetry": ["otel", "open telemetry"],
 }
 
 

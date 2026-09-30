@@ -27,6 +27,7 @@ An AI-powered job search tool built for international students on OPT/STEM OPT n
 - **Job Discovery** — Polls seeded companies' Greenhouse / Lever / Ashby job boards for postings matching your target roles, scores and dedupes them automatically. Can run on a daily schedule (see `backend/DISCOVERY.md`).
 - **Application Tracker** — Every application grouped by stage (Saved → Applied → Referral → OA → Phone Screen → Interview → Offer / Rejected / Withdrawn) in one vertical list under a pipeline-count strip, with a one-click button to advance each role to its next stage. Each application keeps a dated timeline (dates are editable on the job page, for steps logged after the fact), and a monthly stamp summary shows how many roles hit each stage. Rejections record a reason (form rejection / ghosted / sponsorship / level / resume / OA / interview / other) to surface patterns over time.
 - **Tracker Search** — Search every tracked application by title, company, stage, rejection reason, or your notes. Multiple words narrow the results (e.g. `product rejected`), matches are highlighted, and the query is kept in the URL so opening a job and going back keeps your search.
+- **Interview Practice Check-in** — A built-in 30-day plan to get fluent at coding while explaining out loud, split 50% React / JS timed builds, 35% LeetCode (43 problems, Easy → Medium), and 15% frontend system design (1.5 hours a day by default: 45 / 32 / 13 minutes). Each day lists what to build, solve, and design, with prompts for what to say out loud. A check-in takes a few seconds: minutes, whether you hit that track's bar (a working build within 60 minutes, solved without hints, all five design areas covered), and whether you explained while coding. The page shows a 30-day grid, your streak, how your time is split against the plan, and readiness per track (for example, Easy vs Medium problems solved without hints). The dashboard shows today's status, and the sidebar shows a dot until you check in. An optional Windows desktop reminder is also available.
 - **Referral Helper** — For high-score roles, generates a short LinkedIn cold message targeting alumni or employees for a referral.
 - **Dashboard & Company Profiles** — Quick overview of your top-scoring recent matches, plus a per-company profile showing H-1B filing history imported from DOL data.
 
@@ -143,6 +144,28 @@ Open `http://localhost:5173`.
 ```bash
 docker compose up postgres redis -d
 ```
+
+## Practice Reminder (Windows, optional)
+
+`backend/scripts/practice_reminder.py` checks the database and shows a Windows notification when you
+haven't practiced yet today. The first one comes at the reminder time (20:00 by default; you can
+change it in Practice → settings), then at most once every 2 hours until you check in. Clicking the
+notification opens `/practice`. Task Scheduler runs it every hour, and it only needs Postgres, not the API server.
+
+```powershell
+# From the repo root. Registers the hourly task; also runs on battery and after a missed run.
+$py     = "$PWD\backend\.venv\Scripts\pythonw.exe"
+$script = "$PWD\backend\scripts\practice_reminder.py"
+$action   = New-ScheduledTaskAction -Execute $py -Argument "`"$script`""
+$trigger  = New-ScheduledTaskTrigger -Once -At 00:00 -RepetitionInterval (New-TimeSpan -Hours 1)
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+              -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
+Register-ScheduledTask -TaskName "JDAnalyze Practice Reminder" -Action $action -Trigger $trigger -Settings $settings
+```
+
+- Test the notification right away: `backend\.venv\Scripts\python.exe backend\scripts\practice_reminder.py --now`
+- Remove the task: `schtasks /delete /tn "JDAnalyze Practice Reminder" /f`
+- Each reminder that is sent, and any error, is written to `backend/logs/practice_reminder.log`. If the task reports success but nothing shows up, make sure it may run on battery: tasks created with plain `schtasks /create` skip every run while a laptop is unplugged.
 
 ## H-1B Data Setup
 

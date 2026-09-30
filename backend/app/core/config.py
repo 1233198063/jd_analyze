@@ -57,6 +57,8 @@ class Settings(BaseSettings):
         "python", "sql", "postgresql", "fastapi", "next.js",
         "ai", "llm", "machine learning", "tailwind", "rest api",
         "graphql", "docker", "git", "aws", "gcp",
+        "redux", "tanstack query", "sse", "jest", "vitest", "playwright",
+        "terraform", "github actions", "opentelemetry",
     ]
 
     # Hard-reject patterns
