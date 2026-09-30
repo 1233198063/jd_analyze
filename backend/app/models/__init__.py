@@ -3,6 +3,7 @@ from app.models.company import Company, H1BRecord
 from app.models.application import Application
 from app.models.resume import Resume
 from app.models.skill_study import SkillStudy, StudyStatus
+from app.models.practice import PracticeLog, PracticeSettings
 
 __all__ = [
     "Job", "JobAnalysis", "ResumeMatchScore", "ResumeTailoring",

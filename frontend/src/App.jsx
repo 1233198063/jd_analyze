@@ -8,6 +8,7 @@ import Tracker from "@/pages/Tracker";
 import ResumePage from "@/pages/ResumePage";
 import GapAnalysis from "@/pages/GapAnalysis";
 import CompanyProfile from "@/pages/CompanyProfile";
+import Practice from "@/pages/Practice";
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/resume" element={<ResumePage />} />
           <Route path="/gaps" element={<GapAnalysis />} />
           <Route path="/companies/:companyId" element={<CompanyProfile />} />
+          <Route path="/practice" element={<Practice />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
