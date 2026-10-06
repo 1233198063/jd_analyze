@@ -19,21 +19,57 @@ const SECTION_KEYWORDS = new Set([
   "objective",
 ]);
 
+// Concrete technologies bolded in bullets even when the Skills section doesn't list them — it
+// rarely names every protocol or tool a bullet mentions (OAuth, GA4, OCR...).
+const TECH_TERMS = [
+  "JavaScript", "TypeScript", "Python", "Java", "C++", "C#", "Rust", "Kotlin", "Swift",
+  "SQL", "NoSQL", "GraphQL", "REST", "gRPC", "HTML", "CSS", "Sass", "Tailwind", "Tailwind CSS",
+  "React", "React Native", "Next.js", "Node.js", "Express.js", "Vue", "Angular", "Svelte",
+  "Redux", "Redux Toolkit", "TanStack Query", "React Query", "Vite", "Webpack", "Storybook",
+  "Ant Design", "Material UI", "D3.js",
+  "FastAPI", "Django", "Flask", "Spring Boot",
+  "PostgreSQL", "MySQL", "MongoDB", "Redis", "Elasticsearch", "Kafka", "Celery",
+  "AWS", "GCP", "Azure", "Docker", "Kubernetes", "Terraform", "CI/CD", "GitHub Actions",
+  "Jest", "Vitest", "Playwright", "Cypress", "MSW",
+  "OAuth", "JWT", "SSO", "SSE", "WebSocket", "GA4", "GTM", "Google Analytics", "OpenTelemetry",
+  "LLM", "RAG", "OpenAI", "LangChain", "PyTorch", "TensorFlow", "OCR",
+  "computer vision", "machine learning", "human-in-the-loop",
+];
+
+// "Languages:" at the start of a Skills line, after an optional bullet.
+const SKILL_LABEL = /^(\s*(?:[•\-\*▪●○]\s*)?)[^:]{1,30}:/;
+
+function lineText(line) {
+  return line.segments.map((s) => s.value).join("");
+}
+
 function isBullet(trimmed) {
   return /^[•\-\*▪●○]/.test(trimmed);
 }
 
+function isSectionName(trimmed) {
+  return SECTION_KEYWORDS.has(trimmed.toLowerCase().replace(/:$/, ""));
+}
+
 function isHeader(trimmed) {
-  const lower = trimmed.toLowerCase().replace(/:$/, "");
-  if (SECTION_KEYWORDS.has(lower)) return true;
+  if (isSectionName(trimmed)) return true;
   return trimmed.length <= 40 && trimmed === trimmed.toUpperCase() && /[A-Z]/.test(trimmed);
 }
 
+// "Company — Title | Location | Dates": pipe-separated, with a year or "Present" in the last part.
+function isEntryHeading(trimmed) {
+  const parts = trimmed.split("|");
+  return parts.length >= 2 && /\b(19|20)\d{2}\b|\bpresent\b/i.test(parts[parts.length - 1]);
+}
+
 function isContactLike(trimmed) {
-  return (
-    trimmed.length < 140 &&
-    (/@/.test(trimmed) || /linkedin\.com|github\.com/i.test(trimmed) || /\+?\d[\d\-\s()]{7,}\d/.test(trimmed))
-  );
+  const hasContactInfo =
+    /@/.test(trimmed) || /linkedin\.com|github\.com/i.test(trimmed) || /\+?\d[\d\-\s()]{7,}\d/.test(trimmed);
+  if (!hasContactInfo) return false;
+  // A long line still counts when it's a list of short separated items (phone | email | links);
+  // a long run of prose is a summary that happens to mention an email or a year range.
+  const parts = trimmed.split(/\s[|•·]\s/);
+  return trimmed.length < 140 || (parts.length >= 3 && parts.every((p) => p.length <= 70));
 }
 
 function classifyContent(trimmed, seenContent) {
@@ -43,19 +79,113 @@ function classifyContent(trimmed, seenContent) {
   if (isHeader(trimmed)) return "header";
   if (seenContent === 1) return "name";
   if (seenContent === 2 && isContactLike(trimmed)) return "contact";
+  if (isEntryHeading(trimmed)) return "entry";
   return "plain";
+}
+
+/**
+ * An all-caps line between a job's heading and its bullets (e.g. "FRONTEND ENGINEERING") groups
+ * that job's bullets; left as a "header" it would render like a whole new section. Marked as a
+ * "subheading" instead, which the preview leaves off the page.
+ */
+function markSubheadings(lines) {
+  let inEntry = false;
+  lines.forEach((line, i) => {
+    if (line.type === "entry") {
+      inEntry = true;
+    } else if (line.type === "header") {
+      const text = lineText(line).trim();
+      const next = lines.slice(i + 1).find((l) => l.type !== "blank");
+      if (inEntry && !isSectionName(text) && next?.type === "bullet") line.type = "subheading";
+      else inEntry = false;
+    }
+  });
+  return lines;
+}
+
+/** The items of a Skills line ("React, Next.js, HTML/CSS"), with "A/B" pairs also split apart. */
+function skillTerms(text) {
+  return text.split(/[,;()]/).flatMap((item) => {
+    const term = item.trim().replace(/^and\s+/i, "").replace(/\.$/, "");
+    if (term.length < 2 || term.length > 40) return [];
+    const parts = term.split("/").map((p) => p.trim());
+    // "HTML/CSS" also matches "HTML" alone; "CI/CD" stays whole so a stray "CD" isn't bolded.
+    return parts.length > 1 && parts.every((p) => p.length >= 3) ? [term, ...parts] : [term];
+  });
+}
+
+/**
+ * Regex source for one term. A term with a capital matches case-sensitively ("React", not "react
+ * to"); an all-lowercase one matches any case. Spaces and hyphens are interchangeable
+ * ("computer-vision"), and a plural either way matches ("AI evals" ~ "AI eval", "LLM" ~ "LLMs").
+ */
+function termPattern(term) {
+  let body = term.includes(" ") && term.endsWith("s") ? term.slice(0, -1) : term;
+  const anyCase = body === body.toLowerCase();
+  body = body.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (anyCase) body = body.replace(/[a-z]/g, (c) => `[${c}${c.toUpperCase()}]`);
+  return `${body.replace(/[\s-]+/g, "[\\s-]")}s?`;
+}
+
+function keywordRanges(text, regex) {
+  const ranges = [];
+  for (const m of text.matchAll(regex)) {
+    const prev = ranges[ranges.length - 1];
+    // "Jest/Vitest" reads as one bold run rather than two with a regular-weight slash between.
+    if (prev && text.slice(prev[1], m.index) === "/") prev[1] = m.index + m[0].length;
+    else ranges.push([m.index, m.index + m[0].length]);
+  }
+  return ranges;
+}
+
+/**
+ * Bolds the technologies in each bullet — whatever the resume's own Skills section lists, plus
+ * TECH_TERMS — so a skimming reader picks out the stack without reading every line. Lines in the
+ * Skills section only get their "Category:" label bolded, since every item there is a keyword.
+ * Stored on the line as `bold: [[start, end], ...]` character ranges into its text.
+ */
+function markKeywords(lines) {
+  const skillLines = [];
+  let inSkills = false;
+  for (const line of lines) {
+    if (line.type === "header") inSkills = /skills/i.test(lineText(line));
+    else if (inSkills && line.type !== "blank") skillLines.push(line);
+  }
+
+  const terms = [...TECH_TERMS];
+  for (const line of skillLines) {
+    const text = lineText(line);
+    const label = text.match(SKILL_LABEL);
+    if (label) line.bold = [[label[1].length, label[0].length]];
+    terms.push(...skillTerms(text.slice(label ? label[0].length : 0)));
+  }
+
+  // Longest first, so "Redux Toolkit" wins over "Redux" where both match.
+  const patterns = [...new Set(terms)].sort((a, b) => b.length - a.length).map(termPattern);
+  // Not preceded by "." either, so a Skills item like "JS" can't match the tail of "Next.js".
+  const regex = new RegExp(`(?<![A-Za-z0-9.])(?:${patterns.join("|")})(?![A-Za-z0-9])`, "g");
+  for (const line of lines) {
+    if (line.type === "bullet" && !skillLines.includes(line)) line.bold = keywordRanges(lineText(line), regex);
+  }
+  return lines;
+}
+
+function markLines(lines) {
+  return markKeywords(markSubheadings(lines));
 }
 
 /** Splits plain resume text into lines classified for Overleaf-style rendering (no diff). */
 export function classifyLines(text) {
   const rawLines = (text || "").split("\n");
   let seenContent = 0;
-  return rawLines.map((raw) => {
-    const trimmed = raw.trim();
-    if (!trimmed) return { type: "blank", segments: [{ type: "equal", value: raw }] };
-    seenContent += 1;
-    return { type: classifyContent(trimmed, seenContent), segments: [{ type: "equal", value: raw }] };
-  });
+  return markLines(
+    rawLines.map((raw) => {
+      const trimmed = raw.trim();
+      if (!trimmed) return { type: "blank", segments: [{ type: "equal", value: raw }] };
+      seenContent += 1;
+      return { type: classifyContent(trimmed, seenContent), segments: [{ type: "equal", value: raw }] };
+    })
+  );
 }
 
 function linesFromTokens(tokens, side) {
@@ -75,15 +205,17 @@ function linesFromTokens(tokens, side) {
   }
 
   let seenContent = 0;
-  return lines.map((segments) => {
-    const trimmed = segments
-      .map((s) => s.value)
-      .join("")
-      .trim();
-    if (!trimmed) return { type: "blank", segments };
-    seenContent += 1;
-    return { type: classifyContent(trimmed, seenContent), segments };
-  });
+  return markLines(
+    lines.map((segments) => {
+      const trimmed = segments
+        .map((s) => s.value)
+        .join("")
+        .trim();
+      if (!trimmed) return { type: "blank", segments };
+      seenContent += 1;
+      return { type: classifyContent(trimmed, seenContent), segments };
+    })
+  );
 }
 
 /**

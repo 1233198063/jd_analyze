@@ -21,10 +21,6 @@ function usePageZoom(trackRef, enabled) {
   return zoom;
 }
 
-function stripLeadingBulletChar(text) {
-  return text.replace(/^[•\-\*▪●○]\s*/, "");
-}
-
 function Segment({ segment }) {
   if (segment.type === "removed") {
     return <del className="bg-coral-50 text-coral-600 decoration-coral-300">{segment.value}</del>;
@@ -35,11 +31,7 @@ function Segment({ segment }) {
   return <>{segment.value}</>;
 }
 
-function LineContent({ segments, stripFirstBullet }) {
-  if (stripFirstBullet && segments.length > 0) {
-    const stripped = { ...segments[0], value: stripLeadingBulletChar(segments[0].value) };
-    segments = [stripped, ...segments.slice(1)];
-  }
+function LineContent({ segments }) {
   return (
     <>
       {segments.map((seg, i) => (
@@ -47,6 +39,56 @@ function LineContent({ segments, stripFirstBullet }) {
       ))}
     </>
   );
+}
+
+/** The segments covering characters [start, end) of a line, each keeping its diff type. */
+function sliceSegments(segments, start, end = Infinity) {
+  const out = [];
+  let pos = 0;
+  for (const seg of segments) {
+    const from = Math.max(start, pos);
+    const to = Math.min(end, pos + seg.value.length);
+    if (from < to) out.push({ ...seg, value: seg.value.slice(from - pos, to - pos) });
+    pos += seg.value.length;
+  }
+  return out;
+}
+
+/**
+ * Splits a contact line into items and the spaces after each "|" between them, so it can wrap
+ * between items but never inside one (e.g. mid-URL). Even indices are items, odd are spaces.
+ */
+function splitContactItems(segments) {
+  const text = segments.map((s) => s.value).join("");
+  const pieces = [];
+  let start = 0;
+  for (const m of text.matchAll(/(?<=[|•·])\s+/g)) {
+    pieces.push(sliceSegments(segments, start, m.index), sliceSegments(segments, m.index, m.index + m[0].length));
+    start = m.index + m[0].length;
+  }
+  pieces.push(sliceSegments(segments, start));
+  return pieces;
+}
+
+/**
+ * A line's text from character `from` on, with its `bold` ranges (keywords and Skills labels,
+ * marked by resumeFormat) set in bold. Diff highlights inside a bold run still show.
+ */
+function EmphasizedContent({ segments, bold = [], from = 0 }) {
+  const pieces = [];
+  let pos = from;
+  for (const [start, end] of bold) {
+    if (end <= pos) continue;
+    if (start > pos) pieces.push(<LineContent key={pieces.length} segments={sliceSegments(segments, pos, start)} />);
+    pieces.push(
+      <strong key={pieces.length}>
+        <LineContent segments={sliceSegments(segments, Math.max(start, pos), end)} />
+      </strong>
+    );
+    pos = end;
+  }
+  pieces.push(<LineContent key={pieces.length} segments={sliceSegments(segments, pos)} />);
+  return <>{pieces}</>;
 }
 
 /** A line is "changed" when the diff left any added/removed segment on it. Plain
@@ -171,7 +213,15 @@ export default function ResumePreview({ lines, className, id, fitToPage = false,
                 className={clsx("text-center text-gray-500", changed && CHANGED_ROW)}
                 style={{ fontSize: fs(9), margin: 0, marginBottom: sp(0.5) }}
               >
-                <LineContent segments={line.segments} />
+                {splitContactItems(line.segments).map((piece, j) =>
+                  j % 2 === 0 ? (
+                    <span key={j} className="whitespace-nowrap">
+                      <LineContent segments={piece} />
+                    </span>
+                  ) : (
+                    <LineContent key={j} segments={piece} />
+                  )
+                )}
               </p>
             );
           }
@@ -195,12 +245,36 @@ export default function ResumePreview({ lines, className, id, fitToPage = false,
             );
           }
 
+          if (line.type === "subheading") return null;
+
+          if (line.type === "entry") {
+            // Company and title (before the first "|") stand out; location and dates stay body
+            // size. The date range after the last "|" wraps as a unit rather than mid-range.
+            const text = line.segments.map((s) => s.value).join("");
+            const headingEnd = text.indexOf("|");
+            let datesStart = text.lastIndexOf("|") + 1;
+            while (text[datesStart] === " ") datesStart += 1;
+            return (
+              <p key={i} className={clsx(changed && CHANGED_ROW)} style={{ margin: 0 }}>
+                <span className="font-bold" style={{ fontSize: fs(11.5) }}>
+                  <LineContent segments={sliceSegments(line.segments, 0, headingEnd)} />
+                </span>
+                <LineContent segments={sliceSegments(line.segments, headingEnd, datesStart)} />
+                <span className="whitespace-nowrap">
+                  <LineContent segments={sliceSegments(line.segments, datesStart)} />
+                </span>
+              </p>
+            );
+          }
+
           if (line.type === "bullet") {
+            // The bullet glyph is drawn separately, so the text starts after the typed one.
+            const bulletPrefix = line.segments.map((s) => s.value).join("").match(/^\s*[•\-\*▪●○]\s*/);
             return (
               <div key={i} className={clsx("flex gap-2 pl-1", changed && CHANGED_ROW)}>
                 <span className="text-gray-500 flex-shrink-0">•</span>
                 <p className="flex-1" style={{ margin: 0 }}>
-                  <LineContent segments={line.segments} stripFirstBullet />
+                  <EmphasizedContent segments={line.segments} bold={line.bold} from={bulletPrefix?.[0].length} />
                 </p>
               </div>
             );
@@ -208,7 +282,7 @@ export default function ResumePreview({ lines, className, id, fitToPage = false,
 
           return (
             <p key={i} className={clsx(changed && CHANGED_ROW)} style={{ margin: 0 }}>
-              <LineContent segments={line.segments} />
+              <EmphasizedContent segments={line.segments} bold={line.bold} />
             </p>
           );
         })}
