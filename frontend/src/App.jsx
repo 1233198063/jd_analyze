@@ -9,6 +9,8 @@ import ResumePage from "@/pages/ResumePage";
 import GapAnalysis from "@/pages/GapAnalysis";
 import CompanyProfile from "@/pages/CompanyProfile";
 import Practice from "@/pages/Practice";
+import GhcGuide from "@/pages/GhcGuide";
+import DailyLog from "@/pages/DailyLog";
 
 export default function App() {
   return (
@@ -24,6 +26,8 @@ export default function App() {
           <Route path="/gaps" element={<GapAnalysis />} />
           <Route path="/companies/:companyId" element={<CompanyProfile />} />
           <Route path="/practice" element={<Practice />} />
+          <Route path="/ghc" element={<GhcGuide />} />
+          <Route path="/today" element={<DailyLog />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
