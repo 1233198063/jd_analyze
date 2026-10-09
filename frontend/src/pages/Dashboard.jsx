@@ -1,6 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import dayjs from "dayjs";
 import { jobsApi } from "@/api/jobs";
+import { sourcesApi } from "@/api/sources";
 import { applicationsApi } from "@/api/applications";
 import { practiceApi } from "@/api/practice";
 import JobCard from "@/components/features/JobCard";
@@ -60,17 +62,61 @@ const TEXT_ONLY_SOURCES = [
   },
 ];
 
-function SourcePill({ label, href }) {
+// Behind Northeastern sign-in, so the app can't fetch or discover anything there — the card links
+// out and remembers when it was last opened, nudging once it's been a few days.
+const SCHOOL_PORTAL = {
+  key: "northeastern_symplicity",
+  label: "Northeastern Symplicity",
+  href: "https://northeastern-csm.symplicity.com/students/app/home",
+};
+const PORTAL_CHECK_EVERY_DAYS = 3;
+
+function SourcePill({ label, href, onOpen }) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
+      onClick={onOpen}
       className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium border border-mist bg-white text-ink/80 hover:border-bubblegum-400 hover:text-ink transition-colors"
     >
       {label}
       <Icon name="open_in_new" size={13} />
     </a>
+  );
+}
+
+function SchoolPortal() {
+  const qc = useQueryClient();
+  const { data: checks } = useQuery({ queryKey: ["source-checks"], queryFn: sourcesApi.checks });
+  const record = useMutation({
+    mutationFn: () => sourcesApi.recordCheck(SCHOOL_PORTAL.key),
+    onSuccess: (row) => qc.setQueryData(["source-checks"], (old) => ({ ...old, ...row })),
+  });
+
+  const last = checks?.[SCHOOL_PORTAL.key];
+  const days = last ? dayjs().startOf("day").diff(dayjs(last).startOf("day"), "day") : null;
+  const due = checks && (days == null || days >= PORTAL_CHECK_EVERY_DAYS);
+  const opened =
+    days == null ? "Not opened from here yet" : days === 0 ? "Opened today" : `Last opened ${days} day${days === 1 ? "" : "s"} ago`;
+
+  return (
+    <div>
+      <p className="text-xs text-ink/50 mb-1.5 inline-flex items-center gap-1">
+        <Icon name="school" size={13} className="text-petrol-500" />
+        School career portal — sign in with your Northeastern account, then paste the job text into "Analyze JD"
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <SourcePill label={SCHOOL_PORTAL.label} href={SCHOOL_PORTAL.href} onOpen={() => record.mutate()} />
+        {checks && (
+          <span className={due ? "text-xs text-gold-700 inline-flex items-center gap-1" : "text-xs text-ink/40"}>
+            {due && <Icon name="schedule" size={13} />}
+            {opened}
+            {due && ` · check for new postings every ${PORTAL_CHECK_EVERY_DAYS} days`}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -82,6 +128,7 @@ function SourcesCard() {
         Opens a search on that site for your target roles — copy any posting's URL or text back into "Analyze JD".
       </p>
       <div className="space-y-3">
+        <SchoolPortal />
         <div>
           <p className="text-xs text-ink/50 mb-1.5 inline-flex items-center gap-1">
             <Icon name="check_circle" size={13} className="text-sage-600" />

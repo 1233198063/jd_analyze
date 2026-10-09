@@ -6,12 +6,14 @@ import { practiceApi } from "@/api/practice";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: "dashboard" },
+  { to: "/today", label: "Daily Log", icon: "checklist" },
   { to: "/discoveries", label: "Discoveries", icon: "bolt" },
   { to: "/jobs/add", label: "Add JD", icon: "note_add" },
   { to: "/tracker", label: "Tracker", icon: "view_kanban" },
   { to: "/resume", label: "Resume", icon: "description" },
   { to: "/gaps", label: "Resume Gaps", icon: "insights" },
   { to: "/practice", label: "Practice", icon: "fitness_center" },
+  { to: "/ghc", label: "GHC 26", icon: "badge" },
 ];
 
 export default function Sidebar() {
