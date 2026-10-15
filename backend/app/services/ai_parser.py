@@ -7,6 +7,7 @@ import re
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.services import codex_client
+from app.core.profile import profile
 
 PARSE_JD_PROMPT = """You are an expert job description analyzer specialized in software engineering roles.
 Extract structured data precisely and conservatively — if information is not clearly stated, use null.
@@ -128,7 +129,7 @@ Company: {company_name}
 Role: {title}
 Level: {level}
 Key Skills Match: {skill_overlap}
-Sender context: New grad / entry-level software engineer, international student (needs visa sponsorship), strong in {top_skills}.
+Sender context: {sender_context}, strong in {top_skills}.
 
 Requirements:
 - Under 100 words
@@ -145,8 +146,8 @@ Return JSON only:
 }}"""
 
 
-COVER_LETTER_PROMPT = """You are an expert technical career coach writing a cover letter for an \
-international student (OPT/STEM OPT/H-1B) applying to one specific job. Never invent companies, \
+COVER_LETTER_PROMPT = """You are an expert technical career coach writing a cover letter for \
+{candidate} applying to one specific job. Never invent companies, \
 titles, dates, metrics, or projects that are not already in the resume text below — only reword, \
 reorder, and emphasize what's genuinely there.
 
@@ -160,11 +161,16 @@ Level: {level}
 Job summary: {job_summary}
 Key requirements: {key_requirements}
 
+FULL JOB DESCRIPTION:
+{job_text}
+
 Requirements:
 - 3-4 short paragraphs, under 350 words total
-- Open with genuine, specific interest in this role/company (not generic flattery)
-- Connect 2-3 concrete pieces of the candidate's real experience (from the resume text) to the JD's \
-actual requirements
+- Written for THIS job description: open with a specific reason drawn from the JD text itself (the \
+product, the team's mission, or a responsibility it names) — not generic flattery, and never a detail \
+the JD doesn't actually say
+- Connect 2-3 concrete pieces of the candidate's real experience (from the resume text) to \
+responsibilities or requirements the JD actually lists, using the JD's own wording where it fits
 - Confident, natural tone — no clichés like "I am writing to express my interest" or "team player"
 - Do not mention visa/sponsorship status unless the resume text itself already discusses it
 - Close with a brief, low-pressure call to action
@@ -213,8 +219,7 @@ Return JSON only:
 
 
 APPLICATION_ANALYSIS_PROMPT = """You are a candid job-search coach reviewing one candidate's \
-application outcomes. The candidate is an international student on OPT looking for early-career \
-software roles in the US. Everything below was computed from their own application tracker — \
+application outcomes. {candidate_sentence} Everything below was computed from their own application tracker — \
 reason ONLY from it.
 
 OUTCOME DATA (JSON):
@@ -322,8 +327,8 @@ keyword_coverage exactly once. List every meaningful change in changes, in the o
 the page."""
 
 
-TAILOR_RESUME_PROMPT = """You are an expert technical resume writer and interview coach helping an \
-international student (OPT/STEM OPT/H-1B) tailor their resume for one specific job, without ever \
+TAILOR_RESUME_PROMPT = """You are an expert technical resume writer and interview coach helping \
+{candidate} tailor their resume for one specific job, without ever \
 misrepresenting their real experience.
 
 CRITICAL RULES — DO NOT VIOLATE ANY OF THESE:
@@ -460,6 +465,7 @@ def parse_tailor_stream_output(full_text: str) -> dict:
 
 def _tailor_prompt(resume_text: str, job_analysis: dict) -> str:
     return TAILOR_RESUME_PROMPT.format(
+        **profile.prompt_context(),
         resume_text=resume_text[:8000],
         job_analysis_json=json.dumps(job_analysis, indent=2)[:4000],
     )
@@ -490,6 +496,7 @@ def generate_referral_message(
 ) -> dict:
     raw = _call(
         REFERRAL_PROMPT.format(
+            **profile.prompt_context(),
             company_name=company_name,
             title=title,
             level=level,
@@ -508,15 +515,19 @@ def generate_cover_letter(
     level: str,
     job_summary: str,
     key_requirements: list[str],
+    job_text: str = "",
 ) -> dict:
     raw = _call(
         COVER_LETTER_PROMPT.format(
+            **profile.prompt_context(),
             resume_text=resume_text[:8000],
             company_name=company_name,
             title=title,
             level=level,
             job_summary=job_summary or "(no summary available)",
             key_requirements=", ".join(key_requirements[:8]) or "(none listed)",
+            # 9k chars covers ~90% of stored JDs whole; the rest lose only their boilerplate tail.
+            job_text=(job_text or "(not available)")[:9000],
         ),
     )
     return json.loads(raw)
@@ -526,6 +537,7 @@ def generate_cover_letter(
 def summarize_application_outcomes(analysis: dict) -> dict:
     raw = _call(
         APPLICATION_ANALYSIS_PROMPT.format(
+            **profile.prompt_context(),
             analysis_json=json.dumps(analysis, indent=1, default=str)[:14000],
         ),
     )

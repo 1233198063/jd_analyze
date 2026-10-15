@@ -15,6 +15,7 @@ import re
 from dataclasses import dataclass, field
 
 from app.core.config import settings
+from app.core.profile import profile
 from app.services.skills import normalize_skill_terms
 from app.models.job import SponsorshipStatus, JobLevel, Recommendation, ApplicationPool
 from app.models.company import CompanySize
@@ -246,14 +247,20 @@ def _check_auto_reject(
     if region and not region[1]:
         reasons.append(f"Non-US location: {region[0]} ('{analysis.get('location')}')")
 
-    # 1. Explicit no-sponsorship language
-    for pattern in settings.NO_SPONSOR_PATTERNS:
+    # 1. Work authorization: sponsorship language only matters if you need sponsorship;
+    # citizenship / clearance requirements matter unless you're a US citizen. The first
+    # matching pattern is the reason given, sponsorship checked first.
+    patterns = [
+        *((p, "No sponsorship") for p in (settings.NO_SPONSOR_PATTERNS if profile.needs_sponsorship else [])),
+        *((p, "Citizenship / clearance required") for p in ([] if profile.us_citizen else settings.CITIZENSHIP_PATTERNS)),
+    ]
+    for pattern, label in patterns:
         if pattern in jd_text_lower:
-            reasons.append(f"No sponsorship: '{pattern}' found in JD")
+            reasons.append(f"{label}: '{pattern}' found in JD")
             break
 
     sponsorship_status = analysis.get("sponsorship", {}).get("status", "unknown")
-    if sponsorship_status == "no_sponsor" and not reasons:
+    if profile.needs_sponsorship and sponsorship_status == "no_sponsor" and not reasons:
         reasons.append("AI detected no-sponsorship language")
 
     # 2. Years experience out of reach. Only an explicit 5+ floor rejects outright;
@@ -269,11 +276,12 @@ def _check_auto_reject(
     # graduated. Title phrasing is trusted directly; body text only counts when it's
     # an unambiguous eligibility-window statement (body text often just says "new
     # grad" to redirect actual new grads to a *different* posting, not to gate this one).
-    for pattern in settings.NEW_GRAD_ONLY_TITLE_PATTERNS:
+    # A new grad is exactly who those postings want, so the rule is off for them.
+    for pattern in [] if profile.new_grad else settings.NEW_GRAD_ONLY_TITLE_PATTERNS:
         if pattern in title_lower:
             reasons.append(f"New-grad-cohort only: '{pattern}' in title")
             break
-    if not any("New-grad-cohort" in r for r in reasons):
+    if not profile.new_grad and not any("New-grad-cohort" in r for r in reasons):
         for pattern in settings.NEW_GRAD_ONLY_BODY_PATTERNS:
             if pattern in jd_text_lower:
                 reasons.append(f"New-grad-cohort only: '{pattern}' found")
@@ -295,7 +303,11 @@ def _score_h1b(
     - JD sponsorship_status = sponsors → strong base
     - DOL filing history adds confidence
     - E-Verify registered → STEM OPT compatible
+
+    Someone who doesn't need sponsorship gets the full score: it's simply not a risk for them.
     """
+    if not profile.needs_sponsorship:
+        return float(settings.SCORE_WEIGHT_H1B)
     score = 0.0
 
     sponsor_status = analysis.get("sponsorship", {}).get("status", "unknown")

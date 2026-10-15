@@ -1,4 +1,4 @@
-"""Daily interview-practice check-ins against a 30-day plan (see services/practice_plan.py)."""
+"""Daily interview-practice check-ins against the practice plan (see services/practice_plan.py)."""
 import uuid
 from datetime import date, datetime
 
@@ -27,7 +27,7 @@ class PracticeLog(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     practiced_on: Mapped[date] = mapped_column(Date, index=True)
-    track: Mapped[str] = mapped_column(String(20))  # react | leetcode | system_design
+    track: Mapped[str] = mapped_column(String(20))  # project | react | leetcode | system_design | english
     minutes: Mapped[int] = mapped_column(Integer)
     item_key: Mapped[str | None] = mapped_column(String(60), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(200))

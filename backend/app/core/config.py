@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     SCORE_WEIGHT_COMPANY: int = 10
     SCORE_WEIGHT_PRODUCT: int = 10
 
-    # Preferred locations for Bay Area filter
+    # Preferred locations (named for the original Bay Area search; profile.target_locations overrides)
     BAY_AREA_KEYWORDS: List[str] = [
         "san francisco", "sf", "san jose", "mountain view", "palo alto",
         "sunnyvale", "santa clara", "menlo park", "redwood city", "foster city",
@@ -61,7 +61,9 @@ class Settings(BaseSettings):
         "terraform", "github actions", "opentelemetry",
     ]
 
-    # Hard-reject patterns
+    # Hard-reject patterns. Which of the two lists apply depends on profile.work_authorization:
+    # visa-sponsorship language only matters to someone who needs sponsorship; citizenship and
+    # clearance requirements reject everyone except a US citizen.
     NO_SPONSOR_PATTERNS: List[str] = [
         "not eligible for immigration sponsorship",
         "not able to sponsor",
@@ -70,6 +72,8 @@ class Settings(BaseSettings):
         "cannot sponsor",
         "no sponsorship",
         "must be authorized to work",
+    ]
+    CITIZENSHIP_PATTERNS: List[str] = [
         "must be a us citizen",
         "must be a u.s. citizen",
         "security clearance required",
@@ -106,3 +110,11 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# The personal profile (backend/profile.json) decides what "a good fit" means for this user.
+from app.core.profile import profile  # noqa: E402
+
+if profile.target_skills is not None:
+    settings.TARGET_SKILLS = profile.target_skills
+if profile.target_locations is not None:
+    settings.BAY_AREA_KEYWORDS = profile.target_locations

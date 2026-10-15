@@ -10,6 +10,9 @@ export function printElementAsPdf(elementId, filename) {
     @media print {
       body * { visibility: hidden !important; }
       #${elementId}, #${elementId} * { visibility: visible !important; }
+      /* A positioned ancestor (e.g. a fixed modal overlay) would otherwise anchor the page below
+         instead of the sheet's top-left corner, shifting it down and off the page. */
+      *:has(#${elementId}) { position: static !important; transform: none !important; }
       #${elementId} {
         position: absolute; left: 0; top: 0; width: 210mm !important; height: 297mm !important;
         box-shadow: none !important; border: none !important; overflow: hidden !important;

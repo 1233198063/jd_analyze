@@ -11,6 +11,7 @@ router = APIRouter(prefix="/sources", tags=["sources"])
 
 # Job sources behind a login the app can't pass (school SSO), so nothing can be discovered from
 # them automatically — the Dashboard links out and records when each was last opened instead.
+# "career_portal" is the school portal from profile.career_portal.
 WATCHED_SOURCES = {"career_portal"}
 
 

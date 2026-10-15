@@ -1,0 +1,20 @@
+{
+  "name": "Your Name",
+  "work_authorization": "needs_sponsorship",
+  "new_grad": false,
+
+  "target_skills": ["python", "javascript", "typescript", "react", "node.js", "sql", "postgresql", "aws", "docker", "git", "rest api", "ai", "llm"],
+  "target_locations": ["san francisco", "san jose", "mountain view", "palo alto", "sunnyvale", "santa clara", "bay area", "silicon valley", "seattle", "new york"],
+
+  "search_phrases": ["Software Engineer", "Frontend Engineer", "Full-Stack Engineer", "Backend Engineer", "AI Engineer"],
+  "search_location": "United States",
+  "role_keywords": ["software engineer", "software developer", "frontend", "front-end", "full stack", "full-stack", "backend", "back-end", "ai engineer"],
+  "amazon_queries": ["software development engineer", "frontend engineer", "full stack engineer", "applied ai engineer"],
+
+  "alumni_search_url": "",
+  "career_portal": null,
+  "networking_links": [],
+  "networking_scripts": [],
+
+  "practice_sprint": []
+}

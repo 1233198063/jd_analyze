@@ -3,7 +3,7 @@ import clsx from "clsx";
 import Icon from "@/components/common/Icon";
 import { DIFFICULTY_STYLE, TRACK_STYLE } from "@/utils/practice";
 
-const EXPLAIN_LABEL = "Explained it out loud while coding";
+const EXPLAIN_LABEL = "Explained it out loud";
 
 function Check({ checked, onChange, children }) {
   return (
@@ -114,9 +114,12 @@ function TrackHeader({ track, meta, target, logged }) {
   );
 }
 
-/** One plan item for a single-item track (React / JS or System Design). */
-export function PlanItemCard({ track, meta, item, target, logged, doneKeys, todayLogs, onLog, onUndo, pending }) {
+/** One plan item checked in as a whole (everything except a LeetCode set). The item's own `bar`
+ *  (a sprint day's completion standard) overrides the track's default bar. */
+export function PlanItemCard({ meta, item, target, logged, doneKeys, todayLogs, onLog, onUndo, pending }) {
   const [redo, setRedo] = useState(false);
+  const track = item.track;
+  const barLabel = item.bar ?? meta.bar;
   const log = todayLogs.find((l) => l.item_key === item.key);
   const done = doneKeys.includes(item.key) && !redo;
 
@@ -130,11 +133,11 @@ export function PlanItemCard({ track, meta, item, target, logged, doneKeys, toda
       <SayItOutLoud text={item.say} />
       <div className="mt-auto pt-1">
         {done ? (
-          <DoneLine log={log} barLabel={meta.bar} onUndo={onUndo} onRedo={() => setRedo(true)} />
+          <DoneLine log={log} barLabel={barLabel} onUndo={onUndo} onRedo={() => setRedo(true)} />
         ) : (
           <CheckInForm
-            defaultMinutes={target}
-            barLabel={meta.bar}
+            defaultMinutes={item.minutes}
+            barLabel={barLabel}
             pending={pending}
             onSubmit={(values) => {
               onLog({ track, item_key: item.key, title: item.title, ...values });
@@ -150,7 +153,8 @@ export function PlanItemCard({ track, meta, item, target, logged, doneKeys, toda
 /** The LeetCode set: each problem checks in on its own, so Easy vs Medium readiness can be tracked. */
 export function LeetCodeCard({ meta, item, target, logged, doneKeys, todayLogs, onLog, onUndo, pending }) {
   const [redoKeys, setRedoKeys] = useState([]);
-  const perProblem = Math.max(1, Math.round(target / item.problems.length));
+  const perProblem = Math.max(1, Math.round(item.minutes / item.problems.length));
+  const barLabel = item.bar ?? meta.bar;
 
   return (
     <div className="card p-4 flex flex-col gap-2.5">
@@ -180,14 +184,14 @@ export function LeetCodeCard({ meta, item, target, logged, doneKeys, todayLogs, 
               {done ? (
                 <DoneLine
                   log={log}
-                  barLabel={meta.bar}
+                  barLabel={barLabel}
                   onUndo={onUndo}
                   onRedo={() => setRedoKeys((keys) => [...keys, p.key])}
                 />
               ) : (
                 <CheckInForm
                   defaultMinutes={perProblem}
-                  barLabel={meta.bar}
+                  barLabel={barLabel}
                   pending={pending}
                   onSubmit={(values) => {
                     onLog({

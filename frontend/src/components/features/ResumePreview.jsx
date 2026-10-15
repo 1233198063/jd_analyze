@@ -3,11 +3,11 @@ import clsx from "clsx";
 
 // CSS fixes 1mm at 96/25.4 px, so an A4 page always lays out at the same pixel size.
 const PX_PER_MM = 96 / 25.4;
-const PAGE_W_PX = 210 * PX_PER_MM;
-const PAGE_H_PX = 297 * PX_PER_MM;
+export const PAGE_W_PX = 210 * PX_PER_MM;
+export const PAGE_H_PX = 297 * PX_PER_MM;
 
 /** Largest zoom (≤ 1) at which a full A4 page fits the width of `trackRef`. */
-function usePageZoom(trackRef, enabled) {
+export function usePageZoom(trackRef, enabled) {
   const [zoom, setZoom] = useState(1);
   useLayoutEffect(() => {
     const track = trackRef.current;

@@ -11,40 +11,60 @@ import { DIFFICULTY_STYLE, TRACK_ORDER, TRACK_SHORT, TRACK_STYLE } from "@/utils
 
 const pct = (v) => (v == null ? "—" : `${Math.round(v * 100)}%`);
 
+const PHASE_LABEL = {
+  sprint: "冲刺计划",
+  coding: "原 30 天 coding 计划",
+};
+
+// The free-practice form's bar checkbox, per track.
+const FREE_BAR = {
+  project: "讲清楚了，没看稿",
+  react: "Working within 60 min",
+  leetcode: "Solved without hints",
+  system_design: "Covered all five parts",
+  english: "用英文完整说了一遍",
+};
+
 function TodayProgress({ today }) {
-  const total = Object.values(today.targets).reduce((a, b) => a + b, 0);
+  const tracks = TRACK_ORDER.filter((t) => today.targets[t]);
+  const total = tracks.reduce((sum, t) => sum + today.targets[t], 0);
   return (
     <div className="card p-4">
       <div className="flex items-baseline justify-between mb-2">
         <p className="text-sm font-semibold text-ink/80">
-          Today · {today.total_minutes} / {total} min
+          Today · {today.total_minutes}
+          {total > 0 && ` / ${total}`} min
         </p>
-        {!today.checked_in && (
+        {!today.checked_in && today.day_number && (
           <p className="text-xs text-bubblegum-600 flex items-center gap-1">
             <Icon name="notifications_active" size={14} />
             Not practiced yet today
           </p>
         )}
       </div>
-      <div className="flex gap-1 h-2.5">
-        {TRACK_ORDER.map((t) => {
-          const target = today.targets[t];
-          const fill = Math.min(1, (today.minutes[t] || 0) / target);
-          return (
-            <div key={t} className="bg-petrol-50 rounded-full overflow-hidden" style={{ flexGrow: target }}>
-              <div className={clsx("h-full rounded-full", TRACK_STYLE[t].bar)} style={{ width: `${fill * 100}%` }} />
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex gap-4 mt-2 text-xs text-ink/55 flex-wrap">
-        {TRACK_ORDER.map((t) => (
-          <span key={t} className="inline-flex items-center gap-1">
-            <span className={clsx("w-2 h-2 rounded-full", TRACK_STYLE[t].bar)} />
-            {TRACK_SHORT[t]} {today.minutes[t] || 0}/{today.targets[t]}
-          </span>
-        ))}
-      </div>
+      {tracks.length > 0 && (
+        <>
+          <div className="flex gap-1 h-2.5">
+            {tracks.map((t) => {
+              const target = today.targets[t];
+              const fill = Math.min(1, (today.minutes[t] || 0) / target);
+              return (
+                <div key={t} className="bg-petrol-50 rounded-full overflow-hidden" style={{ flexGrow: target }}>
+                  <div className={clsx("h-full rounded-full", TRACK_STYLE[t].bar)} style={{ width: `${fill * 100}%` }} />
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex gap-4 mt-2 text-xs text-ink/55 flex-wrap">
+            {tracks.map((t) => (
+              <span key={t} className="inline-flex items-center gap-1">
+                <span className={clsx("w-2 h-2 rounded-full", TRACK_STYLE[t].bar)} />
+                {TRACK_SHORT[t]} {today.minutes[t] || 0}/{today.targets[t]}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -59,16 +79,16 @@ function SettingsPanel({ settings, onSave, pending, onClose }) {
   return (
     <div className="card p-4 flex flex-wrap items-end gap-4">
       <div>
-        <label className="label">Minutes per day</label>
+        <label className="label">Plan starts on (sprint Day 1)</label>
+        <input type="date" className="input w-40" value={form.start_date} onChange={set("start_date")} />
+      </div>
+      <div>
+        <label className="label">Minutes per day, 30-day plan</label>
         <input type="number" min={15} max={600} className="input w-28" value={form.daily_minutes} onChange={set("daily_minutes")} />
       </div>
       <div>
         <label className="label">Desktop reminder at</label>
         <input type="time" className="input w-32" value={form.reminder_time} onChange={set("reminder_time")} />
-      </div>
-      <div>
-        <label className="label">Plan starts on</label>
-        <input type="date" className="input w-40" value={form.start_date} onChange={set("start_date")} />
       </div>
       <div className="flex gap-2">
         <button
@@ -81,14 +101,15 @@ function SettingsPanel({ settings, onSave, pending, onClose }) {
         <button className="btn-secondary" onClick={onClose}>Cancel</button>
       </div>
       <p className="text-xs text-ink/45 w-full">
-        The split stays 50% React / JS · 35% LeetCode · 15% System Design. The desktop reminder fires
-        from this time on if nothing is logged yet, and again every 2 hours until you check in.
+        Sprint days (if your profile has a practice sprint) use the minutes written into each item. Minutes per day only
+        applies to the 30-day coding plan (50% React / JS · 35% LeetCode · 15% System Design). The desktop reminder
+        fires from this time on if nothing is logged yet, and again every 2 hours until you check in.
       </p>
     </div>
   );
 }
 
-function OtherPracticeForm({ targets, onLog, pending }) {
+function OtherPracticeForm({ defaults, onLog, pending }) {
   const [track, setTrack] = useState("leetcode");
   const [title, setTitle] = useState("");
   const [difficulty, setDifficulty] = useState("medium");
@@ -103,7 +124,7 @@ function OtherPracticeForm({ targets, onLog, pending }) {
         </select>
         <input
           className="input flex-1 min-w-[12rem] py-1 text-xs"
-          placeholder="What you practiced, e.g. 146. LRU Cache or 'Build a dropdown'"
+          placeholder="What you practiced, e.g. 146. LRU Cache, 'Build a dropdown' or '项目追问练习'"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
@@ -117,8 +138,8 @@ function OtherPracticeForm({ targets, onLog, pending }) {
       </div>
       <CheckInForm
         key={track}
-        defaultMinutes={targets[track]}
-        barLabel={{ react: "Working within 60 min", leetcode: "Solved without hints", system_design: "Covered all five parts" }[track]}
+        defaultMinutes={defaults[track]}
+        barLabel={FREE_BAR[track]}
         pending={pending}
         disabled={!title.trim()}
         submitLabel="Log it"
@@ -133,46 +154,47 @@ function OtherPracticeForm({ targets, onLog, pending }) {
 
 function Readiness({ overview }) {
   const r = overview.readiness;
-  const rows = {
-    react: [
-      ["Builds logged", r.react.sessions],
-      ["Working within 60 min", `${r.react.met_bar} / ${r.react.sessions}`],
-      ["Explained aloud", `${r.react.explained} / ${r.react.sessions}`],
-    ],
-    leetcode: [
-      ["Easy solved without hints", `${r.leetcode.by_difficulty.easy.met_bar} / ${r.leetcode.by_difficulty.easy.sessions}`],
-      ["Medium solved without hints", `${r.leetcode.by_difficulty.medium.met_bar} / ${r.leetcode.by_difficulty.medium.sessions}`],
-      ["Explained aloud", `${r.leetcode.explained} / ${r.leetcode.sessions}`],
-    ],
-    system_design: [
-      ["Designs practiced", r.system_design.sessions],
-      ["Covered all five parts", `${r.system_design.met_bar} / ${r.system_design.sessions}`],
-      ["Explained aloud", `${r.system_design.explained} / ${r.system_design.sessions}`],
-    ],
+  const tracks = TRACK_ORDER.filter((t) => overview.plan_progress[t] || r[t].sessions);
+  const rowsFor = (t) => {
+    if (t === "leetcode") {
+      const d = r.leetcode.by_difficulty;
+      return [
+        ["Easy solved without hints", `${d.easy.met_bar} / ${d.easy.sessions}`],
+        ["Medium solved without hints", `${d.medium.met_bar} / ${d.medium.sessions}`],
+        ["Explained aloud", `${r.leetcode.explained} / ${r.leetcode.sessions}`],
+      ];
+    }
+    return [
+      ["Sessions", r[t].sessions],
+      [`Met the bar`, `${r[t].met_bar} / ${r[t].sessions}`],
+      ["Explained aloud", `${r[t].explained} / ${r[t].sessions}`],
+    ];
   };
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      {TRACK_ORDER.map((t) => (
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+      {tracks.map((t) => (
         <div key={t} className="card p-4">
           <div className="flex items-center gap-2 mb-1">
             <Icon name={TRACK_STYLE[t].icon} size={16} className={TRACK_STYLE[t].text} />
-            <p className="text-sm font-semibold text-ink/80">{overview.tracks[t].label}</p>
+            <p className="text-sm font-semibold text-ink/80">{TRACK_SHORT[t]}</p>
           </div>
           <p className="text-xs text-ink/50 mb-2">
             <span className="text-ink/40">Target: </span>
             {overview.tracks[t].goal}
           </p>
           <dl className="space-y-1 text-xs">
-            {rows[t].map(([label, value]) => (
+            {rowsFor(t).map(([label, value]) => (
               <div key={label} className="flex justify-between gap-2">
                 <dt className="text-ink/60">{label}</dt>
                 <dd className="font-medium text-ink tabular-nums">{value}</dd>
               </div>
             ))}
           </dl>
-          <p className="text-xs text-ink/40 mt-2">
-            Plan items done: {overview.plan_progress[t].done} / {overview.plan_progress[t].total}
-          </p>
+          {overview.plan_progress[t] && (
+            <p className="text-xs text-ink/40 mt-2">
+              Plan items done: {overview.plan_progress[t].done} / {overview.plan_progress[t].total}
+            </p>
+          )}
         </div>
       ))}
     </div>
@@ -180,15 +202,16 @@ function Readiness({ overview }) {
 }
 
 function TimeSplit({ overview }) {
+  const tracks = TRACK_ORDER.filter((t) => overview.plan_share[t] || overview.track_minutes[t]);
   return (
     <div className="space-y-2.5">
-      {TRACK_ORDER.map((t) => (
+      {tracks.map((t) => (
         <div key={t} className="text-xs">
           <div className="flex justify-between mb-1">
             <span className="text-ink/70">{TRACK_SHORT[t]}</span>
             <span className="tabular-nums text-ink/55">
               {overview.track_minutes[t]} min{overview.track_share[t] != null && ` · ${pct(overview.track_share[t])}`}{" "}
-              <span className="text-ink/35">(plan {pct(overview.tracks[t].share)})</span>
+              <span className="text-ink/35">(plan {pct(overview.plan_share[t])})</span>
             </span>
           </div>
           <div className="relative h-2 bg-petrol-50 rounded-full overflow-hidden">
@@ -196,79 +219,138 @@ function TimeSplit({ overview }) {
               className={clsx("h-full rounded-full", TRACK_STYLE[t].bar)}
               style={{ width: pct(overview.track_share[t] ?? 0) }}
             />
-            <div className="absolute top-0 h-full w-0.5 bg-ink/40" style={{ left: pct(overview.tracks[t].share) }} />
+            <div className="absolute top-0 h-full w-0.5 bg-ink/40" style={{ left: pct(overview.plan_share[t]) }} />
           </div>
         </div>
       ))}
-      <p className="text-xs text-ink/40 pt-1">The dark tick is the planned share.</p>
+      <p className="text-xs text-ink/40 pt-1">The dark tick is the share planned across the whole plan.</p>
+    </div>
+  );
+}
+
+/** The day's place in the plan: a sprint day shows its focus and completion standard. */
+function DayBanner({ day }) {
+  if (day.phase === "sprint") {
+    return (
+      <div className="rounded-lg border border-petrol-200 bg-petrol-50 px-3 py-2 text-sm flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="font-semibold text-petrol-600">{day.group}</span>
+        <span className="text-ink/80">{day.theme}</span>
+        <span className="text-xs text-ink/60 inline-flex items-center gap-1">
+          <Icon name="flag" size={14} className="text-petrol-500" />
+          完成标准：{day.standard}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg border border-mist bg-white px-3 py-2 text-sm text-ink/70">
+      <span className="font-semibold text-ink/80">原计划 Day {day.source_day}</span>
+      <span className="ml-3">{day.theme}</span>
+    </div>
+  );
+}
+
+function ItemCards({ day, today, cardProps }) {
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-stretch">
+      {day.items.map((item) => {
+        const props = {
+          meta: today.tracks[item.track],
+          item,
+          target: today.targets[item.track] ?? item.minutes,
+          logged: today.minutes[item.track] || 0,
+          ...cardProps,
+        };
+        return item.problems ? <LeetCodeCard key={item.key} {...props} /> : <PlanItemCard key={item.key} {...props} />;
+      })}
     </div>
   );
 }
 
 function PlanList({ plan, doneKeys, todayNumber, selectedDay, onSelect }) {
-  const currentWeek = plan.days.find((d) => d.day === todayNumber)?.week ?? 1;
-  const [openWeeks, setOpenWeeks] = useState([currentWeek]);
-  const weeks = [...new Set(plan.days.map((d) => d.week))];
-  const isDone = (d) => ({
-    react: doneKeys.includes(d.react.key),
-    leetcode: d.leetcode.problems.every((p) => doneKeys.includes(p.key)),
-    system_design: doneKeys.includes(d.system_design.key),
-  });
+  // Groups in plan order: the sprint's day pairs, then the 30-day plan's weeks.
+  const groups = [];
+  for (const d of plan.days) {
+    const id = `${d.phase}:${d.group}`;
+    let g = groups.find((x) => x.id === id);
+    if (!g) groups.push((g = { id, phase: d.phase, label: d.group, theme: d.theme, standard: d.standard, days: [] }));
+    g.days.push(d);
+  }
+  const currentGroup = groups.find((g) => g.days.some((d) => d.day === todayNumber))?.id ?? groups[0]?.id;
+  const [open, setOpen] = useState([currentGroup]);
+  const itemDone = (item) =>
+    item.problems ? item.problems.every((p) => doneKeys.includes(p.key)) : doneKeys.includes(item.key);
+  const phases = [...new Set(groups.map((g) => g.phase))];
 
   return (
-    <div className="space-y-2">
-      {weeks.map((w) => {
-        const open = openWeeks.includes(w);
+    <div className="space-y-4">
+      {phases.map((phase) => {
+        const phaseDays = plan.days.filter((d) => d.phase === phase);
         return (
-          <div key={w} className="card overflow-hidden">
-            <button
-              className="w-full flex items-center gap-2 px-4 py-2.5 text-left"
-              onClick={() => setOpenWeeks((ws) => (open ? ws.filter((x) => x !== w) : [...ws, w]))}
-            >
-              <Icon name={open ? "expand_more" : "chevron_right"} size={16} className="text-ink/40" />
-              <span className="text-sm font-semibold text-ink/80">
-                {w <= 4 ? `Week ${w}` : "Days 29–30"}
-              </span>
-              <span className="text-xs text-ink/45">{plan.week_themes[w]}</span>
-            </button>
-            {open && (
-              <div className="divide-y divide-mist/60 border-t border-mist/60">
-                {plan.days.filter((d) => d.week === w).map((d) => {
-                  const done = isDone(d);
-                  return (
+          <div key={phase} className="space-y-2">
+            <p className="text-xs font-medium text-ink/55">
+              {PHASE_LABEL[phase]} · Day {phaseDays[0].day}–{phaseDays[phaseDays.length - 1].day} ·{" "}
+              {dayjs(phaseDays[0].date).format("MMM D")} – {dayjs(phaseDays[phaseDays.length - 1].date).format("MMM D")}
+              {phase === "coding" && " · 之前没完成的部分，接在冲刺后面"}
+            </p>
+            {groups
+              .filter((g) => g.phase === phase)
+              .map((g) => {
+                const isOpen = open.includes(g.id);
+                return (
+                  <div key={g.id} className="card overflow-hidden">
                     <button
-                      key={d.day}
-                      onClick={() => onSelect(d.day)}
-                      className={clsx(
-                        "w-full text-left px-4 py-2 grid grid-cols-[5.5rem_1fr_1fr_1fr] gap-3 text-xs hover:bg-canvas",
-                        d.day === todayNumber && "bg-bubblegum-100/30",
-                        d.day === selectedDay && d.day !== todayNumber && "bg-petrol-50"
-                      )}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-left flex-wrap"
+                      onClick={() => setOpen((ids) => (isOpen ? ids.filter((x) => x !== g.id) : [...ids, g.id]))}
                     >
-                      <span className="text-ink/55">
-                        <span className="font-semibold text-ink/80">Day {d.day}</span>
-                        <span className="block">{dayjs(d.date).format("ddd, MMM D")}</span>
-                      </span>
-                      {TRACK_ORDER.map((t) => {
-                        const title =
-                          t === "leetcode" ? d.leetcode.problems.map((p) => p.name).join(", ") : d[t].title;
-                        return (
-                          <span key={t} className="flex items-start gap-1 text-ink/75">
-                            <Icon
-                              name={done[t] ? "check_circle" : TRACK_STYLE[t].icon}
-                              size={13}
-                              filled={done[t]}
-                              className={clsx("flex-shrink-0 mt-px", done[t] ? "text-sage-600" : "text-ink/30")}
-                            />
-                            {title}
-                          </span>
-                        );
-                      })}
+                      <Icon name={isOpen ? "expand_more" : "chevron_right"} size={16} className="text-ink/40" />
+                      <span className="text-sm font-semibold text-ink/80">{g.label}</span>
+                      <span className="text-xs text-ink/55">{g.theme}</span>
+                      {g.standard && <span className="text-xs text-ink/40">· 完成标准：{g.standard}</span>}
                     </button>
-                  );
-                })}
-              </div>
-            )}
+                    {isOpen && (
+                      <div className="divide-y divide-mist/60 border-t border-mist/60">
+                        {g.days.map((d) => (
+                          <button
+                            key={d.day}
+                            onClick={() => onSelect(d.day)}
+                            className={clsx(
+                              "w-full text-left px-4 py-2 grid grid-cols-[6rem_1fr] gap-3 text-xs hover:bg-canvas",
+                              d.day === todayNumber && "bg-bubblegum-100/30",
+                              d.day === selectedDay && d.day !== todayNumber && "bg-petrol-50"
+                            )}
+                          >
+                            <span className="text-ink/55">
+                              <span className="font-semibold text-ink/80">Day {d.day}</span>
+                              <span className="block">{dayjs(d.date).format("ddd, MMM D")}</span>
+                              {d.source_day && <span className="block text-ink/35">原 Day {d.source_day}</span>}
+                            </span>
+                            <span className="flex flex-wrap gap-x-4 gap-y-1">
+                              {d.items.map((item) => {
+                                const done = itemDone(item);
+                                const title = item.problems
+                                  ? `${item.title}: ${item.problems.map((p) => p.name).join(", ")}`
+                                  : item.title;
+                                return (
+                                  <span key={item.key} className="flex items-start gap-1 text-ink/75 max-w-[22rem]">
+                                    <Icon
+                                      name={done ? "check_circle" : TRACK_STYLE[item.track].icon}
+                                      size={13}
+                                      filled={done}
+                                      className={clsx("flex-shrink-0 mt-px", done ? "text-sage-600" : TRACK_STYLE[item.track].text)}
+                                    />
+                                    {title}
+                                  </span>
+                                );
+                              })}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
           </div>
         );
       })}
@@ -277,9 +359,9 @@ function PlanList({ plan, doneKeys, todayNumber, selectedDay, onSelect }) {
 }
 
 /**
- * 30-day interview-practice plan: today's three items with a one-click check-in, the month at a
- * glance, and readiness against each track's bar. The month's real goal — explaining while
- * coding — is asked on every check-in.
+ * Interview practice: the two-week sprint (project deep-dives, coding, English), then whatever is
+ * left of the original 30-day coding plan. Today's items with a one-click check-in, the plan at a
+ * glance, and readiness per track. Every check-in asks whether you explained it out loud.
  */
 export default function Practice() {
   const qc = useQueryClient();
@@ -317,6 +399,7 @@ export default function Practice() {
     onUndo: (id) => undo.mutate(id),
     pending: log.isPending,
   };
+  const s = today.settings;
 
   return (
     <div className="space-y-5">
@@ -324,10 +407,11 @@ export default function Practice() {
         <div>
           <h1 className="text-2xl font-bold text-ink">Interview Practice</h1>
           <p className="text-sm text-ink/55 mt-0.5">
-            {today.day_number
-              ? `Day ${today.day_number} of ${today.plan_days} · ${today.week_theme}`
-              : `Plan runs ${dayjs(today.settings.start_date).format("MMM D")} – ${dayjs(today.settings.end_date).format("MMM D")}`}
-            {today.day_number && ` · goal by ${dayjs(today.settings.end_date).format("MMM D")}`}
+            {today.plan
+              ? `Day ${today.day_number} of ${today.plan_days} · ${PHASE_LABEL[today.plan.phase]}`
+              : `Plan runs ${dayjs(s.start_date).format("MMM D")} – ${dayjs(s.end_date).format("MMM D")}`}
+            {s.sprint_end_date && ` · sprint ends ${dayjs(s.sprint_end_date).format("MMM D")}`}
+            {` · plan ends ${dayjs(s.end_date).format("MMM D")}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -347,7 +431,7 @@ export default function Practice() {
 
       {settingsOpen && (
         <SettingsPanel
-          settings={today.settings}
+          settings={s}
           pending={saveSettings.isPending}
           onSave={(values) => saveSettings.mutate(values)}
           onClose={() => setSettingsOpen(false)}
@@ -367,40 +451,19 @@ export default function Practice() {
       )}
 
       {shownPlan ? (
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-stretch">
-          <PlanItemCard
-            track="react"
-            meta={today.tracks.react}
-            item={shownPlan.react}
-            target={today.targets.react}
-            logged={today.minutes.react}
-            {...cardProps}
-          />
-          <LeetCodeCard
-            meta={today.tracks.leetcode}
-            item={shownPlan.leetcode}
-            target={today.targets.leetcode}
-            logged={today.minutes.leetcode}
-            {...cardProps}
-          />
-          <PlanItemCard
-            track="system_design"
-            meta={today.tracks.system_design}
-            item={shownPlan.system_design}
-            target={today.targets.system_design}
-            logged={today.minutes.system_design}
-            {...cardProps}
-          />
+        <div className="space-y-3">
+          <DayBanner day={shownPlan} />
+          <ItemCards day={shownPlan} today={today} cardProps={cardProps} />
         </div>
       ) : (
         <div className="card p-8 text-center text-sm text-ink/55">
-          Today is outside the 30-day plan. Open the settings to start a new round.
+          Today is outside the plan. Open the settings to start a new round.
         </div>
       )}
 
       {log.isError && <p className="text-xs text-coral-600">{log.error.message}</p>}
 
-      <OtherPracticeForm targets={today.targets} onLog={(payload) => log.mutate(payload)} pending={log.isPending} />
+      <OtherPracticeForm defaults={today.default_minutes} onLog={(payload) => log.mutate(payload)} pending={log.isPending} />
 
       {today.logs.length > 0 && (
         <div className="card p-4">
@@ -437,7 +500,7 @@ export default function Practice() {
           <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
             <div className="card p-4">
               <div className="flex items-baseline justify-between mb-3">
-                <p className="text-sm font-semibold text-ink/80">30 days</p>
+                <p className="text-sm font-semibold text-ink/80">{overview.days.length} days</p>
                 <p className="text-xs text-ink/50">
                   Practiced {overview.days_practiced} of {overview.days_elapsed} {overview.days_elapsed === 1 ? "day" : "days"} so far
                   {overview.explained_rate != null && ` · explained aloud in ${pct(overview.explained_rate)} of sessions`}

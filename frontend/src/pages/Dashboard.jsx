@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import dayjs from "dayjs";
 import { jobsApi } from "@/api/jobs";
 import { sourcesApi } from "@/api/sources";
+import { profileApi } from "@/api/profile";
 import { applicationsApi } from "@/api/applications";
 import { practiceApi } from "@/api/practice";
 import JobCard from "@/components/features/JobCard";
@@ -11,64 +12,39 @@ import { PageLoader } from "@/components/common/Loading";
 import Icon from "@/components/common/Icon";
 import { TRACK_ORDER, TRACK_SHORT, TRACK_STYLE } from "@/utils/practice";
 
-const SEARCH_KEYWORDS = [
-  "Frontend Software Engineer",
-  "Full-Stack Software Engineer",
-  "Product Engineer",
-  "AI Application Engineer",
-  "AI Agent Engineer",
-  "Agentic Workflow",
-  "AI Tooling",
-  "Developer Platform",
-  "Internal Tools",
-  "AI Platform",
-  "Frontend Infrastructure",
-  "Generative AI",
-  "LLM Applications",
-];
-const SEARCH_LOCATION = "Bay Area";
-const KEYWORD_QUERY = SEARCH_KEYWORDS.map((k) => `"${k}"`).join(" OR ");
-
-function googleSiteSearch(site) {
-  const q = `site:${site} (${KEYWORD_QUERY}) ${SEARCH_LOCATION}`;
-  return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
+// Search phrases and location come from the user's profile (backend/profile.json).
+function buildSources(phrases, location) {
+  const query = phrases.map((k) => `"${k}"`).join(" OR ");
+  const googleSiteSearch = (site) =>
+    `https://www.google.com/search?q=${encodeURIComponent(`site:${site} (${query}) ${location}`)}`;
+  return {
+    urlSources: [
+      { label: "Greenhouse", href: googleSiteSearch("boards.greenhouse.io") },
+      { label: "Lever", href: googleSiteSearch("jobs.lever.co") },
+      { label: "Ashby", href: googleSiteSearch("jobs.ashbyhq.com") },
+      { label: "Workday", href: googleSiteSearch("myworkdayjobs.com") },
+      {
+        label: "Company career page",
+        href: `https://www.google.com/search?q=${encodeURIComponent(`(${query}) ${location} careers`)}&ibp=htl;jobs`,
+      },
+    ],
+    textOnlySources: [
+      {
+        label: "LinkedIn",
+        href: `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(`(${query})`)}&location=${encodeURIComponent(location)}`,
+      },
+      {
+        label: "Indeed",
+        href: `https://www.indeed.com/jobs?q=${encodeURIComponent(query)}&l=${encodeURIComponent(location)}`,
+      },
+    ],
+  };
 }
 
-const URL_SOURCES = [
-  { label: "Greenhouse", href: googleSiteSearch("boards.greenhouse.io") },
-  { label: "Lever", href: googleSiteSearch("jobs.lever.co") },
-  { label: "Ashby", href: googleSiteSearch("jobs.ashbyhq.com") },
-  { label: "Workday", href: googleSiteSearch("myworkdayjobs.com") },
-  {
-    label: "Company career page",
-    href: `https://www.google.com/search?q=${encodeURIComponent(
-      `(${KEYWORD_QUERY}) ${SEARCH_LOCATION} careers`
-    )}&ibp=htl;jobs`,
-  },
-];
-
-const TEXT_ONLY_SOURCES = [
-  {
-    label: "LinkedIn",
-    href: `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(
-      `(${KEYWORD_QUERY})`
-    )}&location=${encodeURIComponent(SEARCH_LOCATION)}`,
-  },
-  {
-    label: "Indeed",
-    href: `https://www.indeed.com/jobs?q=${encodeURIComponent(KEYWORD_QUERY)}&l=${encodeURIComponent(
-      SEARCH_LOCATION
-    )}`,
-  },
-];
-
-// Behind the school's sign-in, so the app can't fetch or discover anything there — the card links
-// out and remembers when it was last opened, nudging once it's been a few days.
-const SCHOOL_PORTAL = {
-  key: "career_portal",
-  label: "School career portal",
-  href: "https://careers.example.edu/",
-};
+// The school's job portal from the profile. It sits behind the school's sign-in, so the app can't
+// fetch or discover anything there — the card links out and remembers when it was last opened,
+// nudging once it's been a few days.
+const PORTAL_KEY = "career_portal";
 const PORTAL_CHECK_EVERY_DAYS = 3;
 
 function SourcePill({ label, href, onOpen }) {
@@ -86,15 +62,15 @@ function SourcePill({ label, href, onOpen }) {
   );
 }
 
-function SchoolPortal() {
+function SchoolPortal({ portal }) {
   const qc = useQueryClient();
   const { data: checks } = useQuery({ queryKey: ["source-checks"], queryFn: sourcesApi.checks });
   const record = useMutation({
-    mutationFn: () => sourcesApi.recordCheck(SCHOOL_PORTAL.key),
+    mutationFn: () => sourcesApi.recordCheck(PORTAL_KEY),
     onSuccess: (row) => qc.setQueryData(["source-checks"], (old) => ({ ...old, ...row })),
   });
 
-  const last = checks?.[SCHOOL_PORTAL.key];
+  const last = checks?.[PORTAL_KEY];
   const days = last ? dayjs().startOf("day").diff(dayjs(last).startOf("day"), "day") : null;
   const due = checks && (days == null || days >= PORTAL_CHECK_EVERY_DAYS);
   const opened =
@@ -107,7 +83,7 @@ function SchoolPortal() {
         School career portal — sign in with your school account, then paste the job text into "Analyze JD"
       </p>
       <div className="flex flex-wrap items-center gap-2">
-        <SourcePill label={SCHOOL_PORTAL.label} href={SCHOOL_PORTAL.href} onOpen={() => record.mutate()} />
+        <SourcePill label={portal.label} href={portal.url} onOpen={() => record.mutate()} />
         {checks && (
           <span className={due ? "text-xs text-gold-700 inline-flex items-center gap-1" : "text-xs text-ink/40"}>
             {due && <Icon name="schedule" size={13} />}
@@ -121,6 +97,9 @@ function SchoolPortal() {
 }
 
 function SourcesCard() {
+  const { data: profile } = useQuery({ queryKey: ["profile"], queryFn: profileApi.get, staleTime: Infinity });
+  if (!profile) return null;
+  const { urlSources, textOnlySources } = buildSources(profile.search_phrases, profile.search_location);
   return (
     <div className="card p-5">
       <p className="text-sm font-semibold text-ink mb-1">Search by Source</p>
@@ -128,14 +107,14 @@ function SourcesCard() {
         Opens a search on that site for your target roles — copy any posting's URL or text back into "Analyze JD".
       </p>
       <div className="space-y-3">
-        <SchoolPortal />
+        {profile.career_portal && <SchoolPortal portal={profile.career_portal} />}
         <div>
           <p className="text-xs text-ink/50 mb-1.5 inline-flex items-center gap-1">
             <Icon name="check_circle" size={13} className="text-sage-600" />
             Their listing URLs work directly with the analyzer
           </p>
           <div className="flex flex-wrap gap-1.5">
-            {URL_SOURCES.map((s) => (
+            {urlSources.map((s) => (
               <SourcePill key={s.label} label={s.label} href={s.href} />
             ))}
           </div>
@@ -146,7 +125,7 @@ function SourcesCard() {
             Blocks scraping — paste the job text instead of the URL
           </p>
           <div className="flex flex-wrap gap-1.5">
-            {TEXT_ONLY_SOURCES.map((s) => (
+            {textOnlySources.map((s) => (
               <SourcePill key={s.label} label={s.label} href={s.href} />
             ))}
           </div>
@@ -161,7 +140,8 @@ function PracticeCard() {
   const { data: overview } = useQuery({ queryKey: ["practice", "overview"], queryFn: practiceApi.overview });
   if (!today || !overview) return null;
 
-  const target = Object.values(today.targets).reduce((a, b) => a + b, 0);
+  const tracks = TRACK_ORDER.filter((t) => today.targets[t]);
+  const target = tracks.reduce((sum, t) => sum + today.targets[t], 0);
   const inPlan = today.day_number != null;
   const pending = inPlan && !today.checked_in;
   const plan = today.plan;
@@ -172,7 +152,7 @@ function PracticeCard() {
         <div>
           <p className="text-sm font-semibold text-ink">Interview Practice</p>
           <p className="text-xs text-ink/50 mt-0.5">
-            {inPlan ? `Day ${today.day_number} of ${today.plan_days} · ${today.week_theme}` : "Outside the 30-day plan"}
+            {inPlan ? `Day ${today.day_number} of ${today.plan_days} · ${plan.theme}` : "Outside the practice plan"}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -191,8 +171,8 @@ function PracticeCard() {
         <div className="mb-3 rounded-lg bg-bubblegum-100/60 border border-bubblegum-200 px-3 py-2 text-xs text-ink/80 flex items-start gap-2">
           <Icon name="notifications_active" size={15} className="text-bubblegum-600 mt-px flex-shrink-0" />
           <span>
-            <span className="font-semibold">Nothing logged yet today.</span> Today's set: {plan.react.title} ·{" "}
-            {plan.leetcode.problems.map((p) => p.name).join(", ")} · {plan.system_design.title}
+            <span className="font-semibold">Nothing logged yet today.</span> Today's set:{" "}
+            {plan.items.map((item) => item.title).join(" · ")}
           </span>
         </div>
       )}
@@ -202,7 +182,7 @@ function PracticeCard() {
           <p className="text-xs text-ink/55">
             Today · <span className="font-semibold text-ink">{today.total_minutes}</span> / {target} min
           </p>
-          {TRACK_ORDER.map((t) => (
+          {tracks.map((t) => (
             <div key={t} className="flex items-center gap-2 text-xs">
               <span className="w-24 text-ink/60">{TRACK_SHORT[t]}</span>
               <div className="flex-1 h-1.5 bg-petrol-50 rounded-full overflow-hidden">

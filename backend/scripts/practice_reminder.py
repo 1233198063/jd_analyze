@@ -79,7 +79,7 @@ async def main(force: bool) -> None:
             status = await practice_service.today_status(db)
             settings = await practice_service.get_settings(db)
             now = datetime.now().astimezone()
-            if not force and not practice_service.reminder_due(settings, now, status["checked_in"]):
+            if not force and not practice_service.reminder_due(settings, now, status):
                 await db.commit()  # keep the settings row if this run created it
                 return
             title, body = practice_service.reminder_message(status)

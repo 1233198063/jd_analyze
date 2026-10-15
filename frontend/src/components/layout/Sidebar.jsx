@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import Icon from "@/components/common/Icon";
 import { practiceApi } from "@/api/practice";
+import { profileApi } from "@/api/profile";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: "dashboard" },
@@ -13,7 +14,7 @@ const nav = [
   { to: "/resume", label: "Resume", icon: "description" },
   { to: "/gaps", label: "Resume Gaps", icon: "insights" },
   { to: "/practice", label: "Practice", icon: "fitness_center" },
-  { to: "/ghc", label: "GHC 26", icon: "badge" },
+  { to: "/network", label: "Networking", icon: "coffee" },
 ];
 
 export default function Sidebar() {
@@ -24,6 +25,7 @@ export default function Sidebar() {
     refetchInterval: 10 * 60 * 1000,
   });
   const practicePending = practice?.day_number != null && !practice.checked_in;
+  const { data: profile } = useQuery({ queryKey: ["profile"], queryFn: profileApi.get, staleTime: Infinity });
 
   return (
     <aside className="w-56 flex-shrink-0 bg-ink border-r border-ink flex flex-col">
@@ -72,8 +74,12 @@ export default function Sidebar() {
 
       <div className="px-4 py-4 border-t border-white/10">
         <p className="text-xs text-mist/40">
-          H-1B / OPT / STEM OPT
-          <br />
+          {profile?.needs_sponsorship && (
+            <>
+              H-1B / OPT / STEM OPT
+              <br />
+            </>
+          )}
           Job Search Intelligence
         </p>
       </div>

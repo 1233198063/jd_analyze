@@ -9,7 +9,7 @@ import ResumePage from "@/pages/ResumePage";
 import GapAnalysis from "@/pages/GapAnalysis";
 import CompanyProfile from "@/pages/CompanyProfile";
 import Practice from "@/pages/Practice";
-import GhcGuide from "@/pages/GhcGuide";
+import Networking from "@/pages/Networking";
 import DailyLog from "@/pages/DailyLog";
 
 export default function App() {
@@ -26,7 +26,9 @@ export default function App() {
           <Route path="/gaps" element={<GapAnalysis />} />
           <Route path="/companies/:companyId" element={<CompanyProfile />} />
           <Route path="/practice" element={<Practice />} />
-          <Route path="/ghc" element={<GhcGuide />} />
+          <Route path="/network" element={<Networking />} />
+          {/* GHC 26 was cancelled; its page became Networking. */}
+          <Route path="/ghc" element={<Navigate to="/network" replace />} />
           <Route path="/today" element={<DailyLog />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

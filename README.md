@@ -22,7 +22,7 @@ An AI-powered job search tool built for international students on OPT/STEM OPT n
 - **Two Resume Tracks** — Keep one master resume per track (Frontend, Product / Full-Stack). A rule-based picker recommends which to send for each job, and an AI revision rewrites the chosen one to cover as many of the job's keywords as your real experience supports — never inventing experience — with a keyword-coverage report and a check for any number not in the original.
 - **Resume Match & Gap Analysis** — Upload your master resume. AI identifies missing keywords and evidence gaps per job, then the Resume Gaps page aggregates gaps across your whole job history (or just the roles you applied to) so you know what to learn first — with a lightweight reading-list tracker (want to read / reading / finished + notes) per skill.
 - **AI Resume Tailoring** — Rewrites your master resume for one specific JD without inventing experience: side-by-side diff, clean, and editable views; keyword coverage tracking; honest suggestions for folding a missing skill into an existing project (with an honesty note on what you must be able to speak to); interview trade-off talking points for notable tech choices; and a separate learning-gap list for anything that can't be honestly claimed. Exports to a one-page A4 PDF (auto-shrinks to fit).
-- **AI Cover Letter Drafts** — Generates a resume-grounded cover letter draft per job, ready to copy.
+- **AI Cover Letter Drafts** — Generates a resume-grounded cover letter draft per job; edit it next to a live page preview (saved per job) and export a one-page PDF named `Company-YYYY-MM-DD-coverletter`.
 - **Practice Interview Answers** — Paste a question you might get asked for a specific role and get back a concise, plain-English answer grounded in your actual resume, ready to copy.
 - **Job Discovery** — Polls seeded companies' Greenhouse / Lever / Ashby job boards for postings matching your target roles, scores and dedupes them automatically. Can run on a daily schedule (see `backend/DISCOVERY.md`).
 - **Application Tracker** — Every application grouped by stage (Saved → Applied → Referral → OA → Phone Screen → Interview → Offer / Rejected / Withdrawn) in one vertical list under a pipeline-count strip, with a one-click button to advance each role to its next stage. Each application keeps a dated timeline (dates are editable on the job page, for steps logged after the fact), and a monthly stamp summary shows how many roles hit each stage. Rejections record a reason (form rejection / ghosted / sponsorship / level / resume / OA / interview / other) to surface patterns over time.
@@ -87,6 +87,8 @@ Conventions:
 
 ## Getting Started
 
+Everyone runs their own copy: their own database, their own Codex login, and their own `backend/profile.json` (name, work authorization, target roles and skills, school links, optional practice sprint). Nothing personal lives in the code. A step-by-step guide for setting up a copy, with every profile field explained, is in [SETUP.md](SETUP.md) (中文).
+
 ### Prerequisites
 
 - Python 3.11+
@@ -102,6 +104,9 @@ cd jd-analyze
 
 cp backend/.env.example backend/.env
 # Edit backend/.env and set DATABASE_URL (the CODEX_* settings have working defaults)
+
+cp backend/profile.example.json backend/profile.json
+# Edit backend/profile.json — it's gitignored; see SETUP.md for every field
 ```
 
 ### 2. Set up the database

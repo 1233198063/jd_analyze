@@ -9,6 +9,7 @@ import ResumeTailorPanel from "@/components/features/ResumeTailorPanel";
 import ResumePickPanel from "@/components/features/ResumePickPanel";
 import { readResumeDraft } from "@/components/features/ResumeEditExport";
 import InterviewAnswerPanel from "@/components/features/InterviewAnswerPanel";
+import CoverLetterEditor from "@/components/features/CoverLetterEditor";
 import ApplicationTimeline from "@/components/features/ApplicationTimeline";
 import Icon from "@/components/common/Icon";
 import Badge, { SponsorBadge, LevelBadge, RecommendationBadge, RegionBadge, PoolBadge } from "@/components/common/Badge";
@@ -43,7 +44,6 @@ export default function JobDetail() {
   const [referralOpen, setReferralOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [coverLetterOpen, setCoverLetterOpen] = useState(false);
-  const [coverLetterCopied, setCoverLetterCopied] = useState(false);
   const [tailorOpen, setTailorOpen] = useState(false);
 
   const { data, isLoading, error } = useQuery({
@@ -55,16 +55,6 @@ export default function JobDetail() {
     queryKey: ["referral", jobId],
     queryFn: () => jobsApi.getReferral(jobId),
     enabled: referralOpen,
-  });
-
-  const {
-    data: coverLetter,
-    isLoading: coverLetterLoading,
-    error: coverLetterError,
-  } = useQuery({
-    queryKey: ["cover-letter", jobId],
-    queryFn: () => jobsApi.getCoverLetter(jobId),
-    enabled: coverLetterOpen,
   });
 
   const [chosenResumeId, setChosenResumeId] = useState(null);
@@ -115,14 +105,6 @@ export default function JobDetail() {
     navigator.clipboard.writeText(referral?.message || "");
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const copyCoverLetter = () => {
-    if (!coverLetter) return;
-    const full = `${coverLetter.greeting}\n\n${coverLetter.body}\n\n${coverLetter.sign_off}`;
-    navigator.clipboard.writeText(full);
-    setCoverLetterCopied(true);
-    setTimeout(() => setCoverLetterCopied(false), 2000);
   };
 
   return (
@@ -455,7 +437,7 @@ export default function JobDetail() {
               className="btn-secondary"
               onClick={() => setCoverLetterOpen(true)}
             >
-              Generate Cover Letter
+              Cover Letter
             </button>
           </>
         )}
@@ -553,47 +535,13 @@ export default function JobDetail() {
         </div>
       )}
 
-      {/* Cover letter modal */}
       {coverLetterOpen && (
-        <div className="fixed inset-0 bg-ink/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-ink">Cover Letter Draft</h3>
-              <button
-                onClick={() => setCoverLetterOpen(false)}
-                className="text-ink/40 hover:text-ink/70"
-              >
-                <Icon name="close" size={20} />
-              </button>
-            </div>
-
-            {coverLetterLoading ? (
-              <div className="py-8 text-center text-sm text-ink/55">Generating...</div>
-            ) : coverLetterError ? (
-              <p className="text-sm text-coral-600">{coverLetterError.message}</p>
-            ) : coverLetter ? (
-              <div className="space-y-4">
-                <div className="bg-canvas rounded-lg p-3 text-sm text-ink/90 whitespace-pre-wrap border border-mist max-h-96 overflow-y-auto">
-                  {coverLetter.greeting}
-                  {"\n\n"}
-                  {coverLetter.body}
-                  {"\n\n"}
-                  {coverLetter.sign_off}
-                </div>
-                <p className="text-xs text-ink/40">
-                  A first draft, grounded in your master resume — review before sending, and adjust the
-                  opening to sound like you.
-                </p>
-                <button
-                  className="btn-primary w-full justify-center"
-                  onClick={copyCoverLetter}
-                >
-                  {coverLetterCopied ? "Copied!" : "Copy Cover Letter"}
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </div>
+        <CoverLetterEditor
+          jobId={jobId}
+          company={analysis?.company_name || job.company_name}
+          title={analysis?.title || job.title}
+          onClose={() => setCoverLetterOpen(false)}
+        />
       )}
     </div>
   );

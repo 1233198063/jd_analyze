@@ -414,15 +414,20 @@ async def get_cover_letter(job_id: UUID, db: AsyncSession = Depends(get_db)):
 
     key_requirements = (analysis.required_skills or []) + (analysis.tech_stack or [])
 
+    def present(value: str | None) -> str | None:
+        # The parser sometimes stores the literal string "null", which would end up in the letter.
+        return value if value and value.strip().lower() != "null" else None
+
     try:
         letter_data = await asyncio.to_thread(
             ai_parser.generate_cover_letter,
             resume_text=resume.raw_text,
-            company_name=analysis.company_name or "the company",
-            title=analysis.title or "Software Engineer",
+            company_name=present(analysis.company_name) or present(job.company_name) or "the company",
+            title=present(analysis.title) or present(job.title) or "Software Engineer",
             level=analysis.level.value,
             job_summary=analysis.summary or "",
             key_requirements=key_requirements,
+            job_text=job.raw_text,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")

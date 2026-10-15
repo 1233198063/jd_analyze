@@ -27,8 +27,7 @@ async def practice_overview(db: AsyncSession = Depends(get_db)):
 
 @router.get("/plan")
 async def practice_plan(db: AsyncSession = Depends(get_db)):
-    settings = await practice_service.get_settings(db)
-    return practice_service.plan_with_dates(settings)
+    return await practice_service.plan_with_dates(db)
 
 
 @router.post("/logs")

@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.profile import profile
 from app.models.job import Job, JobSource
 from app.schemas.job import JobCreate
 from app.services import job_service
@@ -22,8 +23,8 @@ TIMEOUT = httpx.Timeout(15.0)
 MAX_NEW_PER_RUN = 25  # cap AI-parsing calls per run to keep cost/time bounded
 MAX_POSTING_AGE_DAYS = 3  # only ingest postings the ATS says were published this recently
 
-# Mirrors the keyword set used for the "Search by Source" links on the dashboard.
-TITLE_KEYWORDS = [
+# Default role focus (frontend / full-stack / AI); profile.role_keywords replaces it.
+DEFAULT_TITLE_KEYWORDS = [
     "frontend", "front-end", "front end",
     "full-stack", "full stack", "fullstack",
     "product engineer",
@@ -36,6 +37,7 @@ TITLE_KEYWORDS = [
     "generative ai",
     "llm",
 ]
+TITLE_KEYWORDS = profile.role_keywords or DEFAULT_TITLE_KEYWORDS
 
 
 def _parse_iso(value: str | None) -> datetime | None:
@@ -54,6 +56,8 @@ def _is_recent(posted_at: datetime | None) -> bool:
 
 
 def _is_new_grad_only(title: str, raw_text: str) -> bool:
+    if profile.new_grad:  # those postings are exactly what a new grad wants
+        return False
     t = (title or "").lower()
     text = (raw_text or "").lower()
     if any(p in t for p in settings.NEW_GRAD_ONLY_TITLE_PATTERNS):
@@ -121,10 +125,11 @@ async def _fetch_ashby(client: httpx.AsyncClient, slug: str) -> list[dict]:
 
 # Amazon has its own custom job-search API (the same one amazon.jobs itself calls) —
 # not a per-slug board like the three ATS above, so it runs its own keyword queries.
-AMAZON_QUERIES = [
+DEFAULT_AMAZON_QUERIES = [
     "frontend engineer", "front end engineer", "full stack engineer", "product engineer",
     "applied ai engineer", "ai agent engineer", "generative ai engineer", "ai platform engineer",
 ]
+AMAZON_QUERIES = profile.amazon_queries or DEFAULT_AMAZON_QUERIES
 
 
 def _parse_amazon_date(value: str | None) -> datetime | None:

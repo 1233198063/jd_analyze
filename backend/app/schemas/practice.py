@@ -3,7 +3,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
-Track = Literal["react", "leetcode", "system_design"]
+Track = Literal["project", "react", "leetcode", "system_design", "english"]
 
 
 class PracticeLogCreate(BaseModel):

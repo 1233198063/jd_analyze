@@ -1,34 +1,56 @@
 """
-The 30-day interview-practice plan: one timed React/JS build, one LeetCode set and one frontend
-system-design drill per day, ordered from fundamentals to full mock interviews.
+The interview-practice plan, in two phases laid end to end:
 
-Every item carries "say" prompts: the month's goal is to explain the approach while writing it,
-so each check-in asks whether that actually happened.
+1. **An optional personal interview sprint** from `profile.practice_sprint` (e.g. a two-week
+   push of project deep-dives, coding and English practice, with a completion standard per day).
+   Nobody's sprint is in the code — each user writes their own, or has none.
+2. **The 30-day coding plan** below (one timed React/JS build, one LeetCode set, one frontend
+   system-design drill a day), appended after the sprint minus any day already finished before
+   the plan's start date.
+
+Every day is a list of items, each tagged with a track, so a day can mix tracks freely. Every item
+carries "say" prompts: the goal is to explain the approach while doing it, so each check-in asks
+whether that actually happened.
 """
 from __future__ import annotations
 
-PLAN_DAYS = 30
+from app.core.profile import profile
 
 TRACKS = {
+    "project": {
+        "label": "项目深挖 / 当日重点",
+        "bar": "达到当天的完成标准",
+        "goal": "两个项目都能脱稿讲清：结构、数据流、失败场景、每个数字的口径，经得起连续追问。",
+        "default_minutes": 45,
+    },
     "react": {
         "label": "React / JS (timed)",
-        "share": 0.50,
         "bar": "Working build within 60 min",
         "goal": "Build a working interactive UI in 45–60 min and explain state, edge cases and improvements.",
+        "default_minutes": 45,
     },
     "leetcode": {
         "label": "LeetCode / DSA",
-        "share": 0.35,
         "bar": "Solved without hints",
         "goal": "Common Easy problems reliably correct; typical Medium problems explained and written.",
+        "default_minutes": 30,
     },
     "system_design": {
         "label": "Frontend System Design",
-        "share": 0.15,
         "bar": "Covered components, data flow, requests, performance and errors",
         "goal": "Design a feature's components, data flow, requests, performance and error handling clearly.",
+        "default_minutes": 15,
+    },
+    "english": {
+        "label": "英文表达",
+        "bar": "用英文完整说了一遍，没看稿",
+        "goal": "项目介绍、技术取舍和 BQ 故事都能用英文自然讲出来，数字和术语不卡壳。",
+        "default_minutes": 20,
     },
 }
+
+# How the original 30-day plan splits its daily budget (settings.daily_minutes) across its tracks.
+OLD_PLAN_SHARES = {"react": 0.50, "leetcode": 0.35, "system_design": 0.15}
 
 WEEK_THEMES = {
     1: "Foundations — state, events, arrays & hashing",
@@ -66,7 +88,7 @@ def _day(n: int, react: tuple, leetcode: tuple, sd: tuple) -> dict:
     }
 
 
-PLAN: list[dict] = [
+OLD_PLAN: list[dict] = [
     # ── Week 1 · Foundations ─────────────────────────────────────────────────
     _day(1,
          ("Todo list", "Add, toggle, edit on double-click, delete; filter All / Active / Done; show items left.",
@@ -291,12 +313,88 @@ PLAN: list[dict] = [
           "Which checklist part you now lead with, and which you still forget.")),
 ]
 
+
+# ── Phase 1 · optional personal interview sprint (profile.practice_sprint) ─────
+def _load_sprint(days: list[dict]) -> list[dict]:
+    """The profile's sprint days, checked enough that a typo fails at startup with a clear message
+    instead of as a broken Practice page. See SETUP.md for the format."""
+    sprint, keys = [], set()
+    for n, day in enumerate(days, start=1):
+        items = day.get("items") or []
+        if not items:
+            raise ValueError(f"profile.practice_sprint day {n} has no items")
+        for item in items:
+            missing = {"key", "track", "title", "minutes"} - item.keys()
+            if missing:
+                raise ValueError(f"profile.practice_sprint day {n}: an item is missing {sorted(missing)}")
+            if item["track"] not in TRACKS:
+                raise ValueError(f"profile.practice_sprint day {n}: unknown track {item['track']!r}")
+            for key in item_keys(item):
+                if key in keys:
+                    raise ValueError(f"profile.practice_sprint: duplicate key {key!r}")
+                keys.add(key)
+        sprint.append({
+            "phase": "sprint",
+            "group": day.get("group") or f"Day {n}",
+            "theme": day.get("theme") or "",
+            "standard": day.get("standard"),
+            "source_day": None,
+            "items": items,
+        })
+    return sprint
+
+
+# ── Phase 2 · the original 30-day plan, converted to the same day format ──────
+def _old_items(day: dict, targets: dict[str, int]) -> list[dict]:
+    return [
+        {**day["react"], "track": "react", "minutes": targets["react"]},
+        {
+            "key": day["leetcode"]["key"],
+            "track": "leetcode",
+            "title": day["leetcode"]["title"],
+            "say": day["leetcode"]["say"],
+            "problems": day["leetcode"]["problems"],
+            "minutes": targets["leetcode"],
+        },
+        {**day["system_design"], "track": "system_design", "minutes": targets["system_design"]},
+    ]
+
+
+def item_keys(item: dict) -> list[str]:
+    """The keys a check-in can log against: one per LeetCode problem, otherwise the item itself."""
+    return [p["key"] for p in item["problems"]] if item.get("problems") else [item["key"]]
+
+
+def _old_day_keys(day: dict) -> set[str]:
+    return {day["react"]["key"], day["system_design"]["key"], *(p["key"] for p in day["leetcode"]["problems"])}
+
+
+def compose_plan(old_targets: dict[str, int], finished_before_start: set[str]) -> list[dict]:
+    """
+    The sprint, then every original-plan day that wasn't fully done before the sprint began.
+    Only logs from before the start count, so practicing an old item early during the sprint marks
+    it done without shifting the dates of everything after it.
+    """
+    days = [{**d, "day": n} for n, d in enumerate(SPRINT, start=1)]
+    for old in OLD_PLAN:
+        if _old_day_keys(old) <= finished_before_start:
+            continue
+        week = old["week"]
+        days.append({
+            "day": len(days) + 1,
+            "phase": "coding",
+            "group": f"Week {week}" if week <= 4 else "Days 29–30",
+            "theme": WEEK_THEMES[week],
+            "standard": None,
+            "source_day": old["day"],
+            "items": _old_items(old, old_targets),
+        })
+    return days
+
+
+SPRINT: list[dict] = _load_sprint(profile.practice_sprint)
+
 ITEM_KEYS: set[str] = {
-    key
-    for day in PLAN
-    for key in (
-        day["react"]["key"],
-        day["system_design"]["key"],
-        *(p["key"] for p in day["leetcode"]["problems"]),
-    )
+    *(key for day in SPRINT for item in day["items"] for key in item_keys(item)),
+    *(key for day in OLD_PLAN for key in _old_day_keys(day)),
 }

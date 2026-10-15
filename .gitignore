@@ -61,3 +61,6 @@ logs/
 # OS
 *.DS_Store
 desktop.ini
+
+# Personal profile (name, school, visa situation, practice sprint) — never committed
+backend/profile.json
