@@ -28,13 +28,16 @@ const STAGE_TINT = {
 
 const tint = (status) => STAGE_TINT[status] || STAGE_TINT.saved;
 
+// Forward moves per stage, most common first: the first one is the prominent button, the
+// rest are quieter alternates. OA and phone screen come in either order, and an OA often
+// leads straight to interviews with no screen in between.
 const NEXT_STATUS = {
-  saved: "applied",
-  applied: "phone_screen",
-  referral_asked: "applied",
-  oa: "phone_screen",
-  phone_screen: "interview",
-  interview: "offer",
+  saved: ["applied"],
+  applied: ["oa", "phone_screen"],
+  referral_asked: ["applied"],
+  oa: ["phone_screen", "interview"],
+  phone_screen: ["interview", "oa"],
+  interview: ["offer"],
 };
 
 const REJECTION_REASONS = [
@@ -209,7 +212,7 @@ function AppRow({ item, colStatus, terms = [], resumes = [] }) {
     },
   });
 
-  const next = NEXT_STATUS[colStatus];
+  const [next, ...alternates] = NEXT_STATUS[colStatus] || [];
   const stageDays = item.status_since != null ? daysSince(item.status_since) : null;
 
   return (
@@ -305,6 +308,17 @@ function AppRow({ item, colStatus, terms = [], resumes = [] }) {
               Mark rejected
             </button>
           )}
+          {alternates.map((status) => (
+            <button
+              key={status}
+              className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border border-petrol-200 text-petrol-600 hover:bg-petrol-50 whitespace-nowrap transition-colors disabled:opacity-50"
+              disabled={update.isPending}
+              onClick={() => update.mutate({ id: item.id, payload: { status } })}
+            >
+              {SHORT_LABEL[status]}
+              <Icon name="arrow_forward" size={13} />
+            </button>
+          ))}
           {next && (
             <button
               className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-md bg-petrol-500 text-white hover:bg-bubblegum-500 whitespace-nowrap transition-colors disabled:opacity-50"

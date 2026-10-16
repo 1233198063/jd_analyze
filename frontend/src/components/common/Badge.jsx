@@ -77,6 +77,18 @@ export function RegionBadge({ location, isRemote }) {
   return <Badge variant="purple"><Icon name="public" size={13} className="mr-1" />{label}</Badge>;
 }
 
+export const APP_STATUS_LABELS = {
+  saved: "Saved",
+  applied: "Applied",
+  referral_asked: "Referral Asked",
+  oa: "OA",
+  phone_screen: "Phone Screen",
+  interview: "Interview",
+  offer: "Offer",
+  rejected: "Rejected",
+  withdrawn: "Withdrawn",
+};
+
 export function AppStatusBadge({ status }) {
   const colors = {
     saved: "gray",
@@ -89,16 +101,5 @@ export function AppStatusBadge({ status }) {
     rejected: "red",
     withdrawn: "gray",
   };
-  const labels = {
-    saved: "Saved",
-    applied: "Applied",
-    referral_asked: "Referral Asked",
-    oa: "OA",
-    phone_screen: "Phone Screen",
-    interview: "Interview",
-    offer: "Offer",
-    rejected: "Rejected",
-    withdrawn: "Withdrawn",
-  };
-  return <Badge variant={colors[status] || "gray"}>{labels[status] || status}</Badge>;
+  return <Badge variant={colors[status] || "gray"}>{APP_STATUS_LABELS[status] || status}</Badge>;
 }

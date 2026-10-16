@@ -6,6 +6,8 @@ export const applicationsApi = {
   update: (id, payload) => client.patch(`/applications/${id}`, payload).then((r) => r.data),
   updateTimelineEvent: (id, index, payload) =>
     client.patch(`/applications/${id}/timeline/${index}`, payload).then((r) => r.data),
+  deleteTimelineEvent: (id, index) =>
+    client.delete(`/applications/${id}/timeline/${index}`).then((r) => r.data),
   delete: (id) => client.delete(`/applications/${id}`),
   kanban: () => client.get("/applications/kanban").then((r) => r.data),
 };

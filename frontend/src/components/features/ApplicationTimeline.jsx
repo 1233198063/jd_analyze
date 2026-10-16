@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { applicationsApi } from "@/api/applications";
-import { AppStatusBadge } from "@/components/common/Badge";
+import { AppStatusBadge, APP_STATUS_LABELS } from "@/components/common/Badge";
+import Icon from "@/components/common/Icon";
 import Stamp, { stampLabel, stampTextClass } from "@/components/features/Stamp";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -12,20 +13,61 @@ function daysBetween(from, to) {
   return dayjs(to).startOf("day").diff(dayjs(from).startOf("day"), "day");
 }
 
-function EventRow({ event, index, applicationId, previousEvent, isLast }) {
+const blankDraft = (event) => ({
+  status: event.status,
+  date: dayjs(event.timestamp).format("YYYY-MM-DD"),
+  note: event.note || "",
+});
+
+/** Only the fields that changed, so an untouched date keeps its time of day (and its order). */
+function changes(event, draft) {
+  const original = blankDraft(event);
+  const payload = {};
+  if (draft.status !== original.status) payload.status = draft.status;
+  if (draft.date !== original.date) {
+    payload.timestamp = dayjs(`${draft.date}T${dayjs(event.timestamp).format("HH:mm:ss")}`).toISOString();
+  }
+  if (draft.note.trim() !== original.note) payload.note = draft.note.trim();
+  return payload;
+}
+
+function EventRow({ event, index, applicationId, jobId, previousEvent, isLast, canDelete }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(dayjs(event.timestamp).format("YYYY-MM-DD"));
+  const [draft, setDraft] = useState(() => blankDraft(event));
+
+  // The current stage, applied date and daily log are all derived from these steps.
+  const refresh = () => {
+    setEditing(false);
+    qc.invalidateQueries({ queryKey: ["application", applicationId] });
+    qc.invalidateQueries({ queryKey: ["job", jobId] });
+    qc.invalidateQueries({ queryKey: ["kanban"] });
+    qc.invalidateQueries({ queryKey: ["application-analysis"] });
+    qc.invalidateQueries({ queryKey: ["daily"] });
+  };
 
   const save = useMutation({
-    mutationFn: (timestamp) =>
-      applicationsApi.updateTimelineEvent(applicationId, index, { timestamp }),
-    onSuccess: () => {
-      setEditing(false);
-      qc.invalidateQueries({ queryKey: ["application", applicationId] });
-      qc.invalidateQueries({ queryKey: ["kanban"] });
-    },
+    mutationFn: (payload) => applicationsApi.updateTimelineEvent(applicationId, index, payload),
+    onSuccess: refresh,
   });
+  const remove = useMutation({
+    mutationFn: () => applicationsApi.deleteTimelineEvent(applicationId, index),
+    onSuccess: refresh,
+  });
+
+  const startEditing = () => {
+    setDraft(blankDraft(event));
+    save.reset();
+    remove.reset();
+    setEditing(true);
+  };
+  const submit = () => {
+    const payload = changes(event, draft);
+    if (Object.keys(payload).length === 0) setEditing(false);
+    else save.mutate(payload);
+  };
+  const busy = save.isPending || remove.isPending;
+  const error = save.error || remove.error;
 
   const gap = previousEvent ? daysBetween(previousEvent.timestamp, event.timestamp) : null;
 
@@ -45,38 +87,85 @@ function EventRow({ event, index, applicationId, previousEvent, isLast }) {
           {gap != null && gap > 0 && (
             <span className="text-xs text-ink/40">+{gap}d</span>
           )}
+          {!editing && (
+            <button
+              className="ml-auto inline-flex items-center gap-1 text-xs text-ink/35 hover:text-petrol-500 transition-colors"
+              onClick={startEditing}
+              title="Fix the stage, date or note of this step"
+            >
+              <Icon name="edit" size={14} />
+              Edit
+            </button>
+          )}
         </div>
 
         {editing ? (
-          <div className="flex items-center gap-2 mt-1.5">
+          <div className="mt-2 p-3 rounded-lg bg-canvas border border-mist/60 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                className="input text-xs py-1 w-40"
+                value={draft.status}
+                onChange={(e) => setDraft({ ...draft, status: e.target.value })}
+                aria-label="Stage"
+              >
+                {Object.entries(APP_STATUS_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+              <input
+                type="date"
+                className="input text-xs py-1 w-36"
+                value={draft.date}
+                onChange={(e) => setDraft({ ...draft, date: e.target.value })}
+                aria-label="Date"
+              />
+            </div>
             <input
-              type="date"
-              className="input text-xs py-1 w-36"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              type="text"
+              className="input text-xs py-1"
+              placeholder="Note (optional), e.g. HackerRank, 90 min"
+              value={draft.note}
+              onChange={(e) => setDraft({ ...draft, note: e.target.value })}
+              onKeyDown={(e) => e.key === "Enter" && submit()}
+              aria-label="Note"
             />
-            <button
-              className="text-xs px-2 py-1 rounded bg-petrol-500 text-white hover:bg-bubblegum-500 transition-colors disabled:opacity-50"
-              disabled={save.isPending}
-              onClick={() => save.mutate(dayjs(draft).toISOString())}
-            >
-              {save.isPending ? "..." : "Save"}
-            </button>
-            <button
-              className="text-xs px-2 py-1 rounded border border-petrol-200"
-              onClick={() => {
-                setDraft(dayjs(event.timestamp).format("YYYY-MM-DD"));
-                setEditing(false);
-              }}
-            >
-              Cancel
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                className="text-xs px-2.5 py-1 rounded bg-petrol-500 text-white hover:bg-bubblegum-500 transition-colors disabled:opacity-50"
+                disabled={busy || !draft.date}
+                onClick={submit}
+              >
+                {save.isPending ? "Saving…" : "Save"}
+              </button>
+              <button
+                className="text-xs px-2.5 py-1 rounded border border-petrol-200 hover:bg-white transition-colors"
+                disabled={busy}
+                onClick={() => setEditing(false)}
+              >
+                Cancel
+              </button>
+              {canDelete && (
+                <button
+                  className="ml-auto inline-flex items-center gap-1 text-xs px-2 py-1 rounded text-ink/40 hover:text-coral-600 hover:bg-coral-50 transition-colors disabled:opacity-50"
+                  disabled={busy}
+                  onClick={() => confirm(`Delete the ${APP_STATUS_LABELS[event.status] || event.status} step?`) && remove.mutate()}
+                >
+                  <Icon name="delete" size={14} />
+                  {remove.isPending ? "Deleting…" : "Delete step"}
+                </button>
+              )}
+            </div>
+            {error && (
+              <p className="text-xs text-coral-600">
+                {error.response?.data?.detail || "Couldn't save the change. Try again."}
+              </p>
+            )}
           </div>
         ) : (
           <button
             className="mt-0.5 block text-left hover:opacity-70 transition-opacity"
-            onClick={() => setEditing(true)}
-            title="Click to correct this date"
+            onClick={startEditing}
+            title="Click to correct this step"
           >
             <span className="font-hand text-lg text-ink/80 leading-none">
               {dayjs(event.timestamp).format("MMM D, YYYY")}
@@ -85,7 +174,7 @@ function EventRow({ event, index, applicationId, previousEvent, isLast }) {
           </button>
         )}
 
-        {event.note && <p className="text-xs text-ink/40 mt-0.5">{event.note}</p>}
+        {!editing && event.note && <p className="text-xs text-ink/40 mt-0.5">{event.note}</p>}
       </div>
     </div>
   );
@@ -131,13 +220,16 @@ export default function ApplicationTimeline({ applicationId }) {
                 event={event}
                 index={i}
                 applicationId={applicationId}
+                jobId={data.job_id}
                 previousEvent={i > 0 ? timeline[i - 1] : null}
                 isLast={i === timeline.length - 1}
+                canDelete={timeline.length > 1}
               />
             ))}
           </div>
           <p className="text-xs text-ink/40 mt-3 pt-3 border-t border-mist/60">
-            Click any date to correct it — useful when you log a step days after it happened.
+            Picked the wrong stage, or logged a step late? Edit any step to fix its stage, date or
+            note, or delete it. The current stage always follows the latest step.
           </p>
         </>
       )}

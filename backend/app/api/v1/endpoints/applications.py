@@ -43,27 +43,51 @@ STATUS_LABELS = {
 }
 
 
+# Notes a step gets automatically, so a corrected step can drop or gain them with its stage.
+DEFAULT_NOTES = {ApplicationStatus.applied.value: "Submitted application"}
+MILESTONE_DATES = {
+    ApplicationStatus.applied.value: "applied_at",
+    ApplicationStatus.rejected.value: "rejected_at",
+}
+
+
 def _timeline_event(status: ApplicationStatus, when: datetime) -> dict:
     event = {"status": status.value, "timestamp": when.isoformat()}
-    if status == ApplicationStatus.applied:
-        event["note"] = "Submitted application"
+    if status.value in DEFAULT_NOTES:
+        event["note"] = DEFAULT_NOTES[status.value]
     return event
 
 
-def _sync_milestone_dates(app: Application) -> None:
-    """Re-derive applied_at / rejected_at from the timeline, which is the record of truth."""
-    for event in app.timeline or []:
+def _sync_from_timeline(app: Application, dropped: frozenset[str] = frozenset()) -> None:
+    """Re-derive the current status and applied_at / rejected_at from the timeline, which is
+    the record of truth. `dropped` holds stages an edit just took out, so their date is
+    cleared instead of pointing at a step that no longer exists."""
+    timeline = app.timeline or []
+    if timeline:
+        app.status = ApplicationStatus(timeline[-1]["status"])
+    found = {}
+    for event in timeline:
+        attr = MILESTONE_DATES.get(event.get("status"))
         raw = event.get("timestamp")
-        if not raw:
+        if not attr or not raw:
             continue
         try:
-            when = datetime.fromisoformat(raw)
+            found[attr] = datetime.fromisoformat(raw)
         except ValueError:
             continue
-        if event.get("status") == ApplicationStatus.applied.value:
-            app.applied_at = when
-        elif event.get("status") == ApplicationStatus.rejected.value:
-            app.rejected_at = when
+    for status, attr in MILESTONE_DATES.items():
+        if attr in found:
+            setattr(app, attr, found[attr])
+        elif status in dropped:
+            setattr(app, attr, None)
+
+
+async def _get_app(db: AsyncSession, app_id: UUID) -> Application:
+    result = await db.execute(select(Application).where(Application.id == app_id))
+    app = result.scalar_one_or_none()
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+    return app
 
 
 def _normalized(text: str) -> str:
@@ -203,17 +227,24 @@ async def update_timeline_event(
     payload: TimelineEventUpdate,
     db: AsyncSession = Depends(get_db),
 ):
-    """Correct the date or note of a already-recorded step."""
-    result = await db.execute(select(Application).where(Application.id == app_id))
-    app = result.scalar_one_or_none()
-    if not app:
-        raise HTTPException(status_code=404, detail="Application not found")
+    """Correct the stage, date or note of an already-recorded step."""
+    app = await _get_app(db, app_id)
 
     timeline = list(app.timeline or [])
     if not 0 <= event_index < len(timeline):
         raise HTTPException(status_code=404, detail="Timeline event not found")
 
     event = dict(timeline[event_index])
+    dropped: frozenset[str] = frozenset()
+    old_status = event.get("status")
+    if payload.status and payload.status.value != old_status:
+        dropped = frozenset({old_status})
+        event["status"] = payload.status.value
+        # Swap an automatic note along with the stage; a note you wrote yourself stays.
+        if old_status in DEFAULT_NOTES and event.get("note") == DEFAULT_NOTES[old_status]:
+            event.pop("note")
+        if payload.status.value in DEFAULT_NOTES and not event.get("note"):
+            event["note"] = DEFAULT_NOTES[payload.status.value]
     if payload.timestamp:
         event["timestamp"] = payload.timestamp.isoformat()
     if payload.note is not None:
@@ -223,7 +254,31 @@ async def update_timeline_event(
     # Keep steps in chronological order so the UI doesn't have to sort around edits.
     timeline.sort(key=lambda e: e.get("timestamp") or "")
     app.timeline = timeline
-    _sync_milestone_dates(app)
+    _sync_from_timeline(app, dropped)
+
+    db.add(app)
+    await db.flush()
+    await db.refresh(app)
+    return app
+
+
+@router.delete("/{app_id}/timeline/{event_index}", response_model=ApplicationOut)
+async def delete_timeline_event(app_id: UUID, event_index: int, db: AsyncSession = Depends(get_db)):
+    """Remove a step logged by mistake; the application falls back to the step before it."""
+    app = await _get_app(db, app_id)
+
+    timeline = list(app.timeline or [])
+    if not 0 <= event_index < len(timeline):
+        raise HTTPException(status_code=404, detail="Timeline event not found")
+    if len(timeline) == 1:
+        raise HTTPException(
+            status_code=409,
+            detail="This is the only step. Delete the application instead.",
+        )
+
+    removed = timeline.pop(event_index)
+    app.timeline = timeline
+    _sync_from_timeline(app, frozenset({removed.get("status")}))
 
     db.add(app)
     await db.flush()

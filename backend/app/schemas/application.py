@@ -41,6 +41,8 @@ class TimelineEvent(BaseModel):
 
 
 class TimelineEventUpdate(BaseModel):
+    # Set to fix a step logged under the wrong stage (e.g. an OA marked as a phone screen).
+    status: Optional[ApplicationStatus] = None
     timestamp: Optional[datetime] = None
     note: Optional[str] = None
 
