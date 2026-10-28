@@ -100,6 +100,20 @@ function LetterPage({ header, text, onOverflow }) {
 // The AI's own draft, kept apart from the edited text so it can be compared against or restored.
 const aiDraftKey = (jobId) => `cover-letter-ai:${jobId}`;
 
+/**
+ * Drafts saved before the backend stopped the AI from signing its own sign-off end in the name
+ * twice ("Sincerely,\nName\nName") — the AI's copy plus the one added here. Keep one.
+ */
+function dropRepeatedName(text, name) {
+  if (!text || !name) return text;
+  const lines = text.trimEnd().split("\n");
+  const n = lines.length;
+  if (n >= 2 && lines[n - 1].trim() === name && lines[n - 2].trim().endsWith(name)) {
+    return lines.slice(0, -1).join("\n");
+  }
+  return text;
+}
+
 function store(key, value) {
   try {
     localStorage.setItem(key, value);
@@ -169,7 +183,6 @@ export default function CoverLetterEditor({ jobId, company, title, onClose }) {
       const letter = await jobsApi.getCoverLetter(jobId);
       const signOff = [letter.sign_off, nameRef.current].filter(Boolean).join("\n");
       const draft = `${letter.greeting}\n\n${letter.body}\n\n${signOff}`;
-      store(aiDraftKey(jobId), draft);
       setAiText(draft);
       setText(draft);
     } catch (err) {
@@ -191,6 +204,16 @@ export default function CoverLetterEditor({ jobId, company, title, onClose }) {
   useEffect(() => {
     if (text !== null) store(storageKey, text);
   }, [text, storageKey]);
+
+  useEffect(() => {
+    if (aiText !== null) store(aiDraftKey(jobId), aiText);
+  }, [aiText, jobId]);
+
+  // The name comes from the resume, which loads after the stored drafts are read.
+  useEffect(() => {
+    setText((t) => dropRepeatedName(t, header.name));
+    setAiText((t) => dropRepeatedName(t, header.name));
+  }, [header.name]);
 
   const filename = coverLetterFilename(company);
   // A draft saved before the AI original was kept separately counts as the starting point.

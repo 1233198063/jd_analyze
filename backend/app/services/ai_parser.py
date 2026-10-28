@@ -179,7 +179,7 @@ Return JSON only:
 {{
   "greeting": "e.g. 'Dear Hiring Manager,' or 'Dear {company_name} Team,'",
   "body": "the full letter body, paragraphs separated by \\n\\n, not including greeting or sign-off",
-  "sign_off": "e.g. 'Sincerely,'"
+  "sign_off": "the closing phrase only, e.g. 'Sincerely,' — no name (it is added below automatically)"
 }}"""
 
 
@@ -530,7 +530,36 @@ def generate_cover_letter(
             job_text=(job_text or "(not available)")[:9000],
         ),
     )
-    return json.loads(raw)
+    return _strip_signature(json.loads(raw))
+
+
+# A closing alone on its line ("Sincerely," / "Best regards"). "Thank you for your
+# consideration." doesn't match: the phrase must be the whole line.
+_CLOSING_LINE = re.compile(
+    r"^(sincerely|best|best regards|kind regards|warm regards|warmly|regards|respectfully|"
+    r"thank you|thanks|cheers),?$",
+    re.IGNORECASE,
+)
+
+
+def _strip_signature(letter: dict) -> dict:
+    """Keep the candidate's name out of the AI's letter: the editor signs it with the name from
+    the resume, so a name the AI wrote too (it did in 3 of 8 test letters) got signed twice."""
+    # "Sincerely,\nJane Doe" / "Sincerely, Jane Doe" -> "Sincerely,"
+    first_line = (letter.get("sign_off") or "").strip().split("\n", 1)[0]
+    closing, comma, _name = first_line.partition(",")
+    letter["sign_off"] = closing.strip() + comma if closing.strip() else "Sincerely,"
+
+    # The body is told to leave the sign-off out; cut one if the model wrote it anyway — a closing
+    # line that is the last line, or the second-to-last followed by a short (name) line.
+    lines = (letter.get("body") or "").strip().split("\n")
+    for i in (len(lines) - 1, len(lines) - 2):
+        is_tail = i == len(lines) - 1 or len(lines[-1].strip()) <= 60
+        if i > 0 and is_tail and _CLOSING_LINE.match(lines[i].strip()):
+            lines = lines[:i]
+            break
+    letter["body"] = "\n".join(lines).strip()
+    return letter
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
