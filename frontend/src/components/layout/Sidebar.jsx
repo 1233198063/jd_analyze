@@ -31,7 +31,7 @@ export default function Sidebar() {
     <aside className="w-56 flex-shrink-0 bg-ink border-r border-ink flex flex-col">
       <div className="px-5 py-5 border-b border-white/10">
         <h1 className="text-base font-bold text-white leading-tight">
-          JD Analyze
+          Offer Coming
         </h1>
         <p className="text-xs text-mist/60 mt-0.5">Job Intelligence</p>
       </div>

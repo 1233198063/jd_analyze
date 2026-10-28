@@ -18,7 +18,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="JD Analyze — Job Intelligence Dashboard",
+    title="Offer Coming — Job Intelligence Dashboard",
     description="AI-powered job description parser, H-1B risk analyzer, resume scorer, and application tracker.",
     version="1.0.0",
     lifespan=lifespan,

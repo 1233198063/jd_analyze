@@ -198,7 +198,7 @@ async def run_discovery(db: AsyncSession) -> dict:
     # Phase 1: fetch + title-filter every company's board. Collected per-company so no
     # single large employer can crowd out the rest before we apply the run-wide cap.
     per_company_matches: list[tuple[dict, list[dict]]] = []
-    async with httpx.AsyncClient(timeout=TIMEOUT, headers={"User-Agent": "JDAnalyze/1.0"}) as client:
+    async with httpx.AsyncClient(timeout=TIMEOUT, headers={"User-Agent": "OfferComing/1.0"}) as client:
         for company in SEED_COMPANIES:
             fetcher = FETCHERS[company["ats"]]
             try:

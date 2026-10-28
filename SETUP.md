@@ -1,4 +1,4 @@
-# JD Analyze 安装指南
+# Offer Coming 安装指南
 
 这个工具每个人在自己电脑上跑一份：
 
@@ -116,7 +116,7 @@ npm run dev
 2. **Add JD**：贴岗位链接（Greenhouse / Lever / Ashby 的链接可以直接抓取）或 JD 全文，点 **Analyze JD**。AI 会解析岗位，并根据你的简历和 profile 打分。
 3. 其他页面（Tracker、Practice、Networking、Daily Log）打开就能用。
 
-以后每次使用，重复第 4、5 步启动前后端就行，不用重新安装。
+以后每次使用不用重新安装。Windows 上直接双击项目根目录的 `start.bat`：它会各开一个窗口跑后端和前端，再自动打开浏览器；已经在跑的服务会跳过，不会重复启动。要停的话关掉对应窗口就行。其他系统重复第 4、5 步。
 
 ---
 

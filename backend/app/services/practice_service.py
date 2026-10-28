@@ -261,5 +261,5 @@ def reminder_message(status: dict) -> tuple[str, str]:
     plan = status["plan"]
     title = f"Day {status['day_number']} of {status['plan_days']} · {sum(status['targets'].values())} min of practice waiting"
     if not plan:
-        return title, "Open JD Analyze to log today's practice."
+        return title, "Open Offer Coming to log today's practice."
     return title, " · ".join(item["title"] for item in plan["items"])

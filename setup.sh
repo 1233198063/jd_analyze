@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "=== JD Analyze Setup ==="
+echo "=== Offer Coming Setup ==="
 
 # Backend .env
 if [ ! -f backend/.env ]; then

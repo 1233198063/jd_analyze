@@ -1,5 +1,5 @@
 """
-The person this copy of JD Analyze belongs to.
+The person this copy of Offer Coming belongs to.
 
 Each user runs their own copy (own database, own Codex login), so "multi-user" just means none of
 the personal parts are baked into the code: they live in `backend/profile.json` (gitignored —

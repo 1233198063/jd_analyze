@@ -1,4 +1,4 @@
-# JD Analyze — Job Intelligence Dashboard
+# Offer Coming — Job Intelligence Dashboard
 
 An AI-powered job search tool built for international students on OPT/STEM OPT navigating H-1B sponsorship uncertainty. Paste a job description or drop a link, and the system automatically parses the role, scores your fit across 6 dimensions, flags sponsorship risk, and cross-references DOL H-1B filing history.
 
@@ -143,6 +143,10 @@ npm run dev
 ```
 
 Open `http://localhost:5173`.
+
+### Next time: one-click start (Windows)
+
+After the setup above, double-click `start.bat` in the repo root. It starts the backend and frontend in their own windows (skipping any that are already running) and opens the app in your browser. Close a window to stop that server.
 
 ### Optional: Docker (Postgres + Redis only)
 
