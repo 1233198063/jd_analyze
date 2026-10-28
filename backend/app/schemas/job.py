@@ -17,6 +17,22 @@ class JobCreate(BaseModel):
         return v
 
 
+class JobIdentityUpdate(BaseModel):
+    """Hand-corrected title / company. Only the fields sent are changed; blank clears one."""
+    title: Optional[str] = None
+    company_name: Optional[str] = None
+
+    @field_validator("title", "company_name", mode="before")
+    @classmethod
+    def clean(cls, v):
+        if v is None:
+            return None
+        v = str(v).strip()
+        if len(v) > 255:
+            raise ValueError("must be 255 characters or fewer")
+        return v or None
+
+
 class JobOut(BaseModel):
     id: UUID
     url: Optional[str]

@@ -37,6 +37,120 @@ function SkillTag({ skill, matched }) {
   );
 }
 
+// The parser sometimes stores the literal string "null" instead of leaving the field empty.
+const present = (value) => (value && value !== "null" ? value : null);
+
+// Title + company, with an inline editor for when the parser got them wrong or missed them.
+function JobIdentity({ jobId, title, company, url }) {
+  const qc = useQueryClient();
+  const [draft, setDraft] = useState(null); // null = not editing
+
+  const save = useMutation({
+    mutationFn: (payload) => jobsApi.update(jobId, payload),
+    onSuccess: (detail) => {
+      setDraft(null);
+      qc.setQueryData(["job", jobId], detail);
+      // Names (and possibly the score, after the rescore) show up on all of these.
+      for (const key of ["jobs", "kanban", "resume-pick", "application-analysis", "resume-gaps", "daily"]) {
+        qc.invalidateQueries({ queryKey: [key] });
+      }
+    },
+  });
+
+  const startEdit = () => {
+    save.reset();
+    setDraft({ title: title || "", company_name: company || "" });
+  };
+  const submit = () => {
+    const changes = {};
+    if (draft.title.trim() !== (title || "")) changes.title = draft.title;
+    if (draft.company_name.trim() !== (company || "")) changes.company_name = draft.company_name;
+    if (Object.keys(changes).length === 0) return setDraft(null);
+    save.mutate(changes);
+  };
+  const onKeyDown = (e) => {
+    if (e.key === "Enter") submit();
+    if (e.key === "Escape") setDraft(null);
+  };
+
+  if (draft) {
+    return (
+      <div className="space-y-2 max-w-xl">
+        <input
+          autoFocus
+          maxLength={255}
+          className="input text-base font-semibold"
+          placeholder="Job title, e.g. Software Engineer, Frontend"
+          value={draft.title}
+          onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+          onKeyDown={onKeyDown}
+        />
+        <input
+          maxLength={255}
+          className="input"
+          placeholder="Company"
+          value={draft.company_name}
+          onChange={(e) => setDraft({ ...draft, company_name: e.target.value })}
+          onKeyDown={onKeyDown}
+        />
+        <div className="flex items-center gap-3">
+          <button className="btn-primary py-1.5" disabled={save.isPending} onClick={submit}>
+            {save.isPending ? "Saving..." : "Save"}
+          </button>
+          <button
+            className="text-sm text-ink/55 hover:text-ink"
+            disabled={save.isPending}
+            onClick={() => setDraft(null)}
+          >
+            Cancel
+          </button>
+          <span className="text-xs text-ink/45">Saving rescores this job (no AI call).</span>
+        </div>
+        {save.error && (
+          <p className="text-xs text-coral-600">
+            {save.error.message}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <h1 className={clsx("text-xl font-bold", title ? "text-ink" : "text-ink/40")}>
+          {title || "Untitled Role"}
+        </h1>
+        <button
+          onClick={startEdit}
+          title="Edit title and company"
+          className={clsx(
+            "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium transition-colors hover:bg-petrol-50 hover:text-petrol-500",
+            title && company ? "text-ink/35" : "text-petrol-500"
+          )}
+        >
+          <Icon name="edit" size={15} />
+          {!(title && company) && `Add ${!title && !company ? "title & company" : !title ? "title" : "company"}`}
+        </button>
+      </div>
+      <div className="flex items-center gap-2 mt-0.5">
+        <p className={company ? "text-ink/70" : "text-ink/40"}>{company || "—"}</p>
+        {url && (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-0.5 text-xs font-medium text-petrol-500 hover:text-petrol-600 hover:underline"
+          >
+            View Original Posting
+            <Icon name="open_in_new" size={13} />
+          </a>
+        )}
+      </div>
+    </>
+  );
+}
+
 export default function JobDetail() {
   const { jobId } = useParams();
   const navigate = useNavigate();
@@ -112,23 +226,12 @@ export default function JobDetail() {
       {/* Header */}
       <div className="flex items-start gap-4">
         <div className="flex-1">
-          <h1 className="text-xl font-bold text-ink">
-            {analysis?.title || job.title || "Untitled Role"}
-          </h1>
-          <div className="flex items-center gap-2 mt-0.5">
-            <p className="text-ink/70">{analysis?.company_name || job.company_name || "—"}</p>
-            {job.url && (
-              <a
-                href={job.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-0.5 text-xs font-medium text-petrol-500 hover:text-petrol-600 hover:underline"
-              >
-                View Original Posting
-                <Icon name="open_in_new" size={13} />
-              </a>
-            )}
-          </div>
+          <JobIdentity
+            jobId={jobId}
+            title={present(analysis?.title) || present(job.title)}
+            company={present(analysis?.company_name) || present(job.company_name)}
+            url={job.url}
+          />
 
           <div className="flex flex-wrap gap-2 mt-2">
             {ms && !rejected && (

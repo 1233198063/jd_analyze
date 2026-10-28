@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from uuid import UUID
 
 from app.core.database import get_db, AsyncSessionLocal
-from app.schemas.job import JobCreate, JobDetailOut, JobListItem, JobOut, ResumeMatchScoreOut, ResumeTailoringOut
+from app.schemas.job import JobCreate, JobDetailOut, JobIdentityUpdate, JobListItem, JobOut, ResumeMatchScoreOut, ResumeTailoringOut
 from app.schemas.resume import (
     ReferralMessageOut,
     CoverLetterOut,
@@ -143,11 +143,7 @@ async def rescore_all(db: AsyncSession = Depends(get_db)):
     return await job_service.rescore_all_jobs(db)
 
 
-@router.get("/{job_id}", response_model=JobDetailOut)
-async def get_job(job_id: UUID, db: AsyncSession = Depends(get_db)):
-    job = await job_service.get_job_detail(db, job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+def _detail_out(job: Job) -> JobDetailOut:
     job_out = JobOut.model_validate(job)
     job_out.application_id = job.application.id if job.application else None
     job_out.application_status = job.application.status.value if job.application else None
@@ -159,6 +155,26 @@ async def get_job(job_id: UUID, db: AsyncSession = Depends(get_db)):
     )
 
 
+@router.get("/{job_id}", response_model=JobDetailOut)
+async def get_job(job_id: UUID, db: AsyncSession = Depends(get_db)):
+    job = await job_service.get_job_detail(db, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return _detail_out(job)
+
+
+@router.patch("/{job_id}", response_model=JobDetailOut)
+async def update_job(job_id: UUID, payload: JobIdentityUpdate, db: AsyncSession = Depends(get_db)):
+    """Hand-correct the title / company name the parser got wrong or missed; rescores the job."""
+    job = await job_service.get_job_detail(db, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    changes = payload.model_dump(exclude_unset=True)
+    if changes:
+        await job_service.update_job_identity(db, job, changes)
+    return _detail_out(job)
+
+
 @router.post("/{job_id}/rescore", response_model=ResumeMatchScoreOut)
 async def rescore_job(job_id: UUID, db: AsyncSession = Depends(get_db)):
     """Re-run scoring (e.g., after updating your resume)."""
@@ -167,34 +183,7 @@ async def rescore_job(job_id: UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Job not found")
     if not job.analysis:
         raise HTTPException(status_code=400, detail="Job not yet analyzed")
-
-    from app.services.job_service import (
-        _apply_breakdown,
-        _get_company,
-        get_master_resumes,
-        resume_skills_for_scoring,
-    )
-    from app.services.scorer import compute_score
-
-    masters = await get_master_resumes(db)
-    company = await _get_company(db, job.analysis.company_name)
-
-    breakdown = compute_score(
-        analysis=job.analysis.raw_ai_response,
-        jd_text_lower=job.raw_text.lower(),
-        resume_matched_skills=resume_skills_for_scoring(masters),
-        company_h1b_total=company.h1b_total_filings if company else 0,
-        company_h1b_rate=company.h1b_approval_rate if company else None,
-        company_swe_filings=company.h1b_swe_filings if company else 0,
-        company_size=company.size if company else None,
-    )
-
-    score = job.match_score
-    if score:
-        _apply_breakdown(score, breakdown)
-        db.add(score)
-
-    return score
+    return await job_service.rescore_job(db, job)
 
 
 @router.post("/{job_id}/tailor-resume", response_model=ResumeTailoringOut)

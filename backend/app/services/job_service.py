@@ -283,6 +283,52 @@ async def get_job_detail(db: AsyncSession, job_id: UUID) -> Job | None:
     return result.scalar_one_or_none()
 
 
+async def rescore_job(db: AsyncSession, job: Job) -> ResumeMatchScore | None:
+    """Recompute the rule-based score for one analyzed job (no AI call)."""
+    masters = await get_master_resumes(db)
+    company = await _get_company(db, job.analysis.company_name)
+
+    breakdown = scorer.compute_score(
+        analysis=job.analysis.raw_ai_response,
+        jd_text_lower=job.raw_text.lower(),
+        resume_matched_skills=resume_skills_for_scoring(masters),
+        company_h1b_total=company.h1b_total_filings if company else 0,
+        company_h1b_rate=company.h1b_approval_rate if company else None,
+        company_swe_filings=company.h1b_swe_filings if company else 0,
+        company_size=company.size if company else None,
+    )
+
+    score = job.match_score
+    if score:
+        _apply_breakdown(score, breakdown)
+        db.add(score)
+    return score
+
+
+async def update_job_identity(db: AsyncSession, job: Job, changes: dict) -> None:
+    """Hand-correct a job's title and/or company name, then rescore it.
+
+    The parser sometimes misses (or stores the literal "null" for) the title or company,
+    so these get typed in by hand. The names live in three places — `jobs`, `job_analyses`
+    and the parsed `raw_ai_response` that the scorer and resume pick read — so all three
+    are written together, otherwise screens and scores would disagree about the same job.
+    A new title can move the level/pool (Senior, New Grad…) and a new company the H-1B
+    lookup, hence the rescore.
+    """
+    for field, value in changes.items():
+        setattr(job, field, value)
+        if job.analysis:
+            setattr(job.analysis, field, value)
+
+    if job.analysis:
+        # Reassign rather than mutate in place: a plain JSONB column doesn't track key edits.
+        job.analysis.raw_ai_response = {**(job.analysis.raw_ai_response or {}), **changes}
+        await rescore_job(db, job)
+
+    db.add(job)
+    await db.flush()
+
+
 async def list_jobs(
     db: AsyncSession,
     skip: int = 0,
