@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
 from fastapi.responses import StreamingResponse
@@ -18,10 +19,12 @@ from app.schemas.resume import (
     ResumeCandidateOut,
     ResumeRevisionOut,
 )
-from app.services import job_service, ai_parser, resume_pick
+from app.services import job_service, ai_parser, resume_pick, discovery_service, posting_check
 from app.services.skills import normalize_skill_terms
+from app.models.discovery import DiscoveryRun
 from app.models.job import Job, ResumeTailoring, ResumeRevision
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
@@ -79,6 +82,7 @@ async def list_jobs(
             application_pool=job.match_score.application_pool if job.match_score else None,
             sponsorship_status=job.analysis.sponsorship_status if job.analysis else None,
             application_status=job.application.status.value if job.application else None,
+            posting_status=job.posting_status,
         )
         result.append(item)
     if discovered:
@@ -95,42 +99,41 @@ async def list_jobs(
     return result
 
 
-_discovery_state: dict = {"status": "idle", "summary": None}
-
-
-async def _run_discovery_task():
-    from app.core.database import AsyncSessionLocal
-    from app.services.discovery_service import run_discovery
-
-    _discovery_state["status"] = "running"
-    try:
-        async with AsyncSessionLocal() as db:
-            summary = await run_discovery(db)
-            await db.commit()
-        _discovery_state["status"] = "done"
-        _discovery_state["summary"] = summary
-    except Exception as e:
-        _discovery_state["status"] = "error"
-        _discovery_state["summary"] = {"error": str(e)}
+async def _run_discovery_task(run_id: UUID):
+    async with AsyncSessionLocal() as db:
+        run = await db.get(DiscoveryRun, run_id)
+        try:
+            await discovery_service.run_discovery(db, run)
+        except Exception:
+            log.exception("Discovery run %s failed", run_id)  # already recorded on the run
 
 
 @router.post("/discover", response_model=dict)
-async def discover_jobs(background_tasks: BackgroundTasks):
+async def discover_jobs(background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     """
     Poll seeded companies' Greenhouse/Lever/Ashby boards for postings matching
     the target-role keywords, score and store any new ones. Safe to re-run —
     already-seen postings (by URL) are skipped. Runs in the background (a full
     pass can take minutes) — poll GET /jobs/discover/status for progress.
     """
-    if _discovery_state["status"] == "running":
+    # Recorded before the task starts, so the first status poll already sees "running".
+    run = await discovery_service.start_run(db, "manual")
+    if run is None:
         return {"status": "running"}
-    background_tasks.add_task(_run_discovery_task)
+    background_tasks.add_task(_run_discovery_task, run.id)
     return {"status": "started"}
 
 
 @router.get("/discover/status", response_model=dict)
-async def discover_status():
-    return _discovery_state
+async def discover_status(db: AsyncSession = Depends(get_db)):
+    """Latest run, last successful one, failing boards, and open/closed counts for the to-apply list."""
+    return await discovery_service.coverage(db)
+
+
+@router.post("/check-postings", response_model=dict)
+async def check_postings(db: AsyncSession = Depends(get_db)):
+    """Re-check that every job on the to-apply list is still posted (free, no AI)."""
+    return await posting_check.verify_postings(await posting_check.pipeline_jobs(db))
 
 
 @router.post("/rescore-all", response_model=dict)
@@ -172,6 +175,17 @@ async def update_job(job_id: UUID, payload: JobIdentityUpdate, db: AsyncSession 
     changes = payload.model_dump(exclude_unset=True)
     if changes:
         await job_service.update_job_identity(db, job, changes)
+    return _detail_out(job)
+
+
+@router.post("/{job_id}/check-posting", response_model=JobDetailOut)
+async def check_job_posting(job_id: UUID, db: AsyncSession = Depends(get_db)):
+    """Is this one posting still up? Asks its job board directly (free, no AI)."""
+    job = await job_service.get_job_detail(db, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    await posting_check.verify_postings([job])
+    await db.flush()
     return _detail_out(job)
 
 

@@ -45,6 +45,9 @@ class JobOut(BaseModel):
     application_id: Optional[UUID] = None
     application_status: Optional[str] = None
     apply_url: Optional[str] = None
+    posting_status: Optional[str] = None
+    posting_checked_at: Optional[datetime] = None
+    posting_check_note: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -201,5 +204,6 @@ class JobListItem(BaseModel):
     application_pool: Optional[str] = None
     sponsorship_status: Optional[SponsorshipStatus] = None
     application_status: Optional[str] = None
+    posting_status: Optional[str] = None
 
     model_config = {"from_attributes": True}

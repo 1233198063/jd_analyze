@@ -77,6 +77,17 @@ export function RegionBadge({ location, isRemote }) {
   return <Badge variant="purple"><Icon name="public" size={13} className="mr-1" />{label}</Badge>;
 }
 
+/** Only the closed case gets a badge: an open posting is the normal state, not news. */
+export function PostingClosedBadge({ status }) {
+  if (status !== "removed") return null;
+  return (
+    <Badge variant="gray">
+      <Icon name="do_not_disturb_on" size={12} className="mr-1" />
+      Posting closed
+    </Badge>
+  );
+}
+
 export const APP_STATUS_LABELS = {
   saved: "Saved",
   applied: "Applied",

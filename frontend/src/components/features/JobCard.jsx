@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import clsx from "clsx";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { SponsorBadge, LevelBadge, AppStatusBadge, RecommendationBadge, RegionBadge, PoolBadge } from "@/components/common/Badge";
+import { SponsorBadge, LevelBadge, AppStatusBadge, RecommendationBadge, RegionBadge, PoolBadge, PostingClosedBadge } from "@/components/common/Badge";
 import ScoreRing from "./ScoreRing";
 
 dayjs.extend(relativeTime);
@@ -16,7 +16,8 @@ export default function JobCard({ job }) {
       to={`/jobs/${job.id}`}
       className={clsx(
         "card block p-4 hover:shadow-md hover:border-bubblegum-300 transition-all",
-        rejected && "border-coral-200 bg-coral-50/40"
+        rejected && "border-coral-200 bg-coral-50/40",
+        job.posting_status === "removed" && "opacity-60"
       )}
     >
       <div className="flex items-start gap-3">
@@ -36,6 +37,7 @@ export default function JobCard({ job }) {
           </div>
 
           <div className="flex flex-wrap gap-1.5 mt-2">
+            <PostingClosedBadge status={job.posting_status} />
             {!rejected && <PoolBadge pool={job.application_pool} />}
             {job.recommendation && (
               <RecommendationBadge recommendation={job.recommendation} score={score} />

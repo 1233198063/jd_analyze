@@ -12,10 +12,10 @@ An AI-powered job search tool built for international students on OPT/STEM OPT n
   |-----------|--------|
   | H-1B / OPT / STEM OPT friendliness | 30 |
   | Level match (by application pool) | 20 |
-  | Skill match (React / TS / Python / SQL / AI) | 20 |
+  | Skill match — share of the JD's technical asks your resume covers (required count double) | 20 |
   | Location (Bay Area preferred) | 10 |
-  | Company size & stability | 10 |
-  | Product direction fit | 10 |
+  | Company — size, or a recognized H-1B sponsor when no company data is loaded | 10 |
+  | Role direction fit — frontend / full-stack / AI apps vs. infra, systems, ML | 10 |
 
 - **Hard Reject Filters** — Auto-rejects roles outside the US, roles that won't sponsor visas or need a security clearance, roles that explicitly require 5+ years, and postings reserved for a new-grad cohort.
 - **Application Pools** — Every remaining role is sorted by experience requirements rather than title alone: **primary** (junior / early-career, ≤2 years, or ≤3 when internships count), **selective** (2–4 years with no hard floor and a strong skill fit), or **deprioritized** (senior-track titles or a hard 2–4 year floor). Deprioritized roles stay visible but score lower instead of being hidden.
@@ -24,7 +24,7 @@ An AI-powered job search tool built for international students on OPT/STEM OPT n
 - **AI Resume Tailoring** — Rewrites your master resume for one specific JD without inventing experience: side-by-side diff, clean, and editable views; keyword coverage tracking; honest suggestions for folding a missing skill into an existing project (with an honesty note on what you must be able to speak to); interview trade-off talking points for notable tech choices; and a separate learning-gap list for anything that can't be honestly claimed. Exports to a one-page A4 PDF (auto-shrinks to fit).
 - **AI Cover Letter Drafts** — Generates a resume-grounded cover letter draft per job; edit it next to a live page preview (saved per job) and export a one-page PDF named `Company-YYYY-MM-DD-coverletter`.
 - **Practice Interview Answers** — Paste a question you might get asked for a specific role and get back a concise, plain-English answer grounded in your actual resume, ready to copy.
-- **Job Discovery** — Polls seeded companies' Greenhouse / Lever / Ashby job boards for postings matching your target roles, scores and dedupes them automatically. Can run on a daily schedule (see `backend/DISCOVERY.md`).
+- **Job Discovery** — Polls ~200 companies' Greenhouse / Lever / Ashby / Workday job boards for postings in your target area matching your target roles, scores and dedupes them automatically, and re-checks that saved postings are still open. Can run on a daily schedule (see `backend/DISCOVERY.md`).
 - **Application Tracker** — Every application grouped by stage (Saved → Applied → Referral → OA → Phone Screen → Interview → Offer / Rejected / Withdrawn) in one vertical list under a pipeline-count strip, with one-click buttons to advance each role. OA and phone screen can come in either order: an applied role moves to an OA or a phone screen, an OA can lead to a screen or straight to interviews, and a phone screen can be followed by an OA. Each application keeps a dated timeline. On the job page every step can be edited (stage, date, note) or deleted, to fix a step logged under the wrong stage or after the fact, and the current stage always follows the latest step, and a monthly stamp summary shows how many roles hit each stage. Rejections record a reason (form rejection / ghosted / sponsorship / level / resume / OA / interview / other) to surface patterns over time.
 - **Tracker Search** — Search every tracked application by title, company, stage, rejection reason, or your notes. Multiple words narrow the results (e.g. `product rejected`), matches are highlighted, and the query is kept in the URL so opening a job and going back keeps your search.
 - **Interview Practice Check-in** — A built-in 30-day plan to get fluent at coding while explaining out loud, split 50% React / JS timed builds, 35% LeetCode (43 problems, Easy → Medium), and 15% frontend system design (1.5 hours a day by default: 45 / 32 / 13 minutes). Each day lists what to build, solve, and design, with prompts for what to say out loud. A check-in takes a few seconds: minutes, whether you hit that track's bar (a working build within 60 minutes, solved without hints, all five design areas covered), and whether you explained while coding. The page shows a 30-day grid, your streak, how your time is split against the plan, and readiness per track (for example, Easy vs Medium problems solved without hints). The dashboard shows today's status, and the sidebar shows a dot until you check in. An optional Windows desktop reminder is also available.
@@ -190,9 +190,13 @@ The system normalizes company names, computes approval rates, and identifies SWE
 
 | Score | Action |
 |-------|--------|
-| 80–100 | Customize resume + find referral |
-| 60–79 | Quick apply |
-| < 60 | Skip unless strong personal interest |
+| 75+ (Apply) | Customize resume + find referral |
+| 60–74 (Maybe) | Quick apply |
+| < 60 (Skip) | Skip unless strong personal interest |
+
+Without the DOL import, 15 of the 30 H-1B points (filing history, approval rate) can't be known, so the
+best reachable total is about 91; Apply starts at 75 on that scale. A recognized sponsor stands in for
+the filing-history tier until the data is imported.
 
 ## Environment Variables
 

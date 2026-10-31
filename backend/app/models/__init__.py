@@ -7,6 +7,7 @@ from app.models.practice import PracticeLog, PracticeSettings
 from app.models.network import NetworkContact
 from app.models.source_check import SourceCheck
 from app.models.daily import DailyTodo
+from app.models.discovery import DiscoveryRun, DiscoveryCompanyCheck
 
 __all__ = [
     "Job", "JobAnalysis", "ResumeMatchScore", "ResumeTailoring",

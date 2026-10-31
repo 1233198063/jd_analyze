@@ -2,7 +2,7 @@ import clsx from "clsx";
 
 function scoreColor(score, isRejected) {
   if (isRejected) return { stroke: "#A8402B", text: "text-coral-700" };
-  if (score >= 80) return { stroke: "#2F6B4E", text: "text-sage-700" };
+  if (score >= 75) return { stroke: "#2F6B4E", text: "text-sage-700" }; // the Apply band (scorer.APPLY_THRESHOLD)
   if (score >= 60) return { stroke: "#9C7318", text: "text-gold-700" };
   return { stroke: "#3E8285", text: "text-ink/60" };
 }

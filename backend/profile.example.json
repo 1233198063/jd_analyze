@@ -9,6 +9,7 @@
   "search_phrases": ["Software Engineer", "Frontend Engineer", "Full-Stack Engineer", "Backend Engineer", "AI Engineer"],
   "search_location": "United States",
   "role_keywords": ["software engineer", "software developer", "frontend", "front-end", "full stack", "full-stack", "backend", "back-end", "ai engineer"],
+  "discovery_locations": "target",
   "amazon_queries": ["software development engineer", "frontend engineer", "full stack engineer", "applied ai engineer"],
 
   "alumni_search_url": "",

@@ -3,16 +3,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.core.database import engine, Base
+from app.core.database import engine, init_db
 from app.api.v1.router import api_router
 import app.models  # ensure all models are registered
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables (in dev; use Alembic in prod)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    await init_db()
     yield
     await engine.dispose()
 

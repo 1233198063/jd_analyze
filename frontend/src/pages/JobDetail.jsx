@@ -14,6 +14,10 @@ import ApplicationTimeline from "@/components/features/ApplicationTimeline";
 import Icon from "@/components/common/Icon";
 import Badge, { SponsorBadge, LevelBadge, RecommendationBadge, RegionBadge, PoolBadge } from "@/components/common/Badge";
 import clsx from "clsx";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+
+dayjs.extend(relativeTime);
 
 function Section({ title, children }) {
   return (
@@ -151,6 +155,50 @@ function JobIdentity({ jobId, title, company, url }) {
   );
 }
 
+// Whether the posting is still up — asked of the job board itself, separate from whether it's worth applying.
+function PostingStatus({ jobId, job }) {
+  const qc = useQueryClient();
+  const check = useMutation({
+    mutationFn: () => jobsApi.checkPosting(jobId),
+    onSuccess: (detail) => {
+      qc.setQueryData(["job", jobId], detail);
+      qc.invalidateQueries({ queryKey: ["jobs"] });
+      qc.invalidateQueries({ queryKey: ["discoverStatus"] });
+    },
+  });
+
+  const { posting_status: status, posting_checked_at: checkedAt, posting_check_note: note } = job;
+  const when = checkedAt ? dayjs(checkedAt).fromNow() : null;
+  const line = {
+    listed: { icon: "check_circle", tone: "text-sage-700", text: `Posting still open · checked ${when}` },
+    removed: { icon: "do_not_disturb_on", tone: "text-ink/60", text: `Posting closed · seen ${when}` },
+    unverified: { icon: "help", tone: "text-ink/45", text: `Can't check automatically — ${note}` },
+  }[status];
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1 text-xs">
+      {line && (
+        <span className={clsx("inline-flex items-center gap-1", line.tone)}>
+          <Icon name={line.icon} size={14} />
+          {line.text}
+        </span>
+      )}
+      {status !== "unverified" && (
+        <button
+          className="font-medium text-petrol-500 hover:text-petrol-600 hover:underline disabled:opacity-50"
+          disabled={check.isPending}
+          onClick={() => check.mutate()}
+        >
+          {check.isPending ? "Checking..." : line ? "Recheck" : "Check if still open"}
+        </button>
+      )}
+      {/* A failed request keeps the last real answer above; say so rather than hide it. */}
+      {status !== "unverified" && note && <span className="text-ink/40">{note}</span>}
+      {check.error && <span className="text-coral-600">{check.error.message}</span>}
+    </div>
+  );
+}
+
 export default function JobDetail() {
   const { jobId } = useParams();
   const navigate = useNavigate();
@@ -232,6 +280,7 @@ export default function JobDetail() {
             company={present(analysis?.company_name) || present(job.company_name)}
             url={job.url}
           />
+          <PostingStatus jobId={jobId} job={job} />
 
           <div className="flex flex-wrap gap-2 mt-2">
             {ms && !rejected && (
@@ -274,8 +323,8 @@ export default function JobDetail() {
             <ScoreBar label="Level Match" value={ms.score_level} max={20} color="blue" />
             <ScoreBar label="Skill Match" value={ms.score_skills} max={20} color="purple" />
             <ScoreBar label="Location (Bay Area)" value={ms.score_location} max={10} color="yellow" />
-            <ScoreBar label="Company Stability" value={ms.score_company} max={10} color="orange" />
-            <ScoreBar label="Product Fit" value={ms.score_product} max={10} color="pink" />
+            <ScoreBar label="Company (known H-1B sponsor)" value={ms.score_company} max={10} color="orange" />
+            <ScoreBar label="Role Direction Fit" value={ms.score_product} max={10} color="pink" />
           </div>
           {ms.recommendation_reason && (
             <p className="text-xs text-ink/55 mt-3 pt-3 border-t border-mist/60">

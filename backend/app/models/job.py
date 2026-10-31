@@ -65,6 +65,14 @@ class Job(Base):
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     discovered: Mapped[bool] = mapped_column(Boolean, default=False)
     posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Whether the posting is still up, independent of whether it's worth applying to.
+    # "listed" | "removed" | "unverified" (no link, or a site that can't be checked); null = never
+    # checked. posting_checked_at is the last check that got an answer — a failed request only
+    # updates the note, so one timeout never flips a posting to closed.
+    posting_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    posting_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    posting_check_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

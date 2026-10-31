@@ -248,7 +248,7 @@ export default function Dashboard() {
   const interviews = kanban.find((col) => col.status === "interview")?.items?.length ?? 0;
 
   const prioritized = jobs
-    .filter((j) => !j.is_auto_rejected && j.overall_score >= 60)
+    .filter((j) => !j.is_auto_rejected && j.overall_score >= 60 && j.posting_status !== "removed")
     .sort((a, b) => (b.overall_score ?? 0) - (a.overall_score ?? 0))
     .slice(0, 6);
 
@@ -271,8 +271,8 @@ export default function Dashboard() {
       {/* Stats row */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
         <StatCard label="Total JDs" value={stats.total} color="petrol" />
-        <StatCard label="Apply" value={stats.apply} sub="80+ score" color="green" />
-        <StatCard label="Maybe" value={stats.maybe} sub="60–79 score" color="yellow" />
+        <StatCard label="Apply" value={stats.apply} sub="75+ score" color="green" />
+        <StatCard label="Maybe" value={stats.maybe} sub="60–74 score" color="yellow" />
         <StatCard label="Auto Rejected" value={stats.rejected} sub="hard filters" color="red" />
         <StatCard label="Applied" value={applied} color="petrol" />
         <StatCard label="Interviews" value={interviews} color="green" />

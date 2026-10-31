@@ -54,6 +54,9 @@ class Profile(BaseModel):
     target_skills: Optional[list[str]] = None
     target_locations: Optional[list[str]] = None
     role_keywords: Optional[list[str]] = None
+    excluded_title_keywords: Optional[list[str]] = None  # discovery skips titles with these (hardware, sales, ...)
+    # Where discovery looks: "target" = your target_locations plus US-remote roles; "us" = anywhere in the US.
+    discovery_locations: Literal["target", "us"] = "target"
     amazon_queries: Optional[list[str]] = None
     search_phrases: Optional[list[str]] = None
     search_location: str = "Bay Area"

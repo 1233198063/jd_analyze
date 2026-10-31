@@ -49,4 +49,7 @@ export const jobsApi = {
   },
   discoverStart: () => client.post("/jobs/discover").then((r) => r.data),
   discoverStatus: () => client.get("/jobs/discover/status").then((r) => r.data),
+  // Is the posting still up? Asks the job board directly (no AI). Returns the full job detail.
+  checkPosting: (id) => client.post(`/jobs/${id}/check-posting`).then((r) => r.data),
+  checkPostings: () => client.post("/jobs/check-postings").then((r) => r.data),
 };

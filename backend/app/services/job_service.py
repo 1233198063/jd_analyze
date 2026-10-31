@@ -73,6 +73,12 @@ def resume_skills_for_scoring(resume: Resume | list[Resume] | None) -> list[str]
     return seen
 
 
+def resume_text_for_scoring(masters: list[Resume]) -> str:
+    """Every master's text, so the skill match can find technologies outside the skill
+    vocabulary (Vite, SQS...) the same way it finds the ones inside it."""
+    return "\n".join(m.raw_text or "" for m in masters)
+
+
 def _normalize_company_name(name: str) -> str:
     normalized = re.sub(r"[^\w\s]", "", name.lower()).strip()
     return re.sub(r"\s+", " ", normalized)
@@ -184,6 +190,8 @@ async def create_job_and_analyze(
         company_h1b_rate=company.h1b_approval_rate if company else None,
         company_swe_filings=company.h1b_swe_filings if company else 0,
         company_size=company.size if company else None,
+        resume_text=resume_text_for_scoring(masters),
+        company_name=ai_data.get("company_name"),
     )
 
     # Step 6: AI resume scoring (only if not auto-rejected and resume exists)
@@ -296,6 +304,8 @@ async def rescore_job(db: AsyncSession, job: Job) -> ResumeMatchScore | None:
         company_h1b_rate=company.h1b_approval_rate if company else None,
         company_swe_filings=company.h1b_swe_filings if company else 0,
         company_size=company.size if company else None,
+        resume_text=resume_text_for_scoring(masters),
+        company_name=job.analysis.company_name or job.company_name,
     )
 
     score = job.match_score
@@ -365,6 +375,7 @@ async def rescore_all_jobs(db: AsyncSession) -> dict:
     masters = await get_master_resumes(db)
     resume = masters[0] if masters else None
     resume_skills = resume_skills_for_scoring(masters)
+    resume_text = resume_text_for_scoring(masters)
 
     companies = (await db.execute(select(Company))).scalars().all()
     by_name = {c.name_normalized: c for c in companies}
@@ -395,6 +406,8 @@ async def rescore_all_jobs(db: AsyncSession) -> dict:
             company_h1b_rate=company.h1b_approval_rate if company else None,
             company_swe_filings=company.h1b_swe_filings if company else 0,
             company_size=company.size if company else None,
+            resume_text=resume_text,
+            company_name=analysis.company_name or job.company_name,
         )
 
         score = job.match_score
