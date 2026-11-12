@@ -25,6 +25,12 @@ async def practice_overview(db: AsyncSession = Depends(get_db)):
     return await practice_service.overview(db)
 
 
+@router.get("/quests")
+async def practice_quests_board(db: AsyncSession = Depends(get_db)):
+    """Every practice quest with its points and whether it's cleared — no schedule attached."""
+    return await practice_service.quest_board(db)
+
+
 @router.get("/plan")
 async def practice_plan(db: AsyncSession = Depends(get_db)):
     return await practice_service.plan_with_dates(db)

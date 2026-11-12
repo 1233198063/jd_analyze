@@ -1,7 +1,6 @@
 import { useState } from "react";
 import clsx from "clsx";
 import Icon from "@/components/common/Icon";
-import { DIFFICULTY_STYLE, TRACK_STYLE } from "@/utils/practice";
 
 const EXPLAIN_LABEL = "Explained it out loud";
 
@@ -58,7 +57,7 @@ export function CheckInForm({ defaultMinutes, barLabel, onSubmit, pending, disab
   );
 }
 
-function SayItOutLoud({ text }) {
+export function SayItOutLoud({ text }) {
   return (
     <div className="rounded-md bg-canvas border border-mist px-2.5 py-2 text-xs text-ink/70 flex items-start gap-1.5">
       <Icon name="record_voice_over" size={14} className="text-ink/40 flex-shrink-0 mt-px" />
@@ -66,149 +65,6 @@ function SayItOutLoud({ text }) {
         <span className="font-medium text-ink/80">Say it out loud: </span>
         {text}
       </span>
-    </div>
-  );
-}
-
-function DoneLine({ log, onUndo, onRedo, barLabel }) {
-  return (
-    <div className="rounded-md bg-sage-50 border border-sage-200 px-2.5 py-1.5 text-xs text-sage-700 flex items-center gap-2 flex-wrap">
-      <Icon name="check_circle" size={15} filled />
-      {log ? (
-        <span>
-          Done · {log.minutes} min
-          {log.met_bar && ` · ${barLabel.toLowerCase()}`}
-          {log.explained_aloud ? " · explained aloud" : " · not explained aloud"}
-        </span>
-      ) : (
-        <span>Done on an earlier day</span>
-      )}
-      <span className="ml-auto flex gap-3">
-        {log && (
-          <button className="text-ink/40 hover:text-coral-600" onClick={() => onUndo(log.id)}>
-            Undo
-          </button>
-        )}
-        <button className="text-ink/50 hover:text-ink" onClick={onRedo}>
-          Log again
-        </button>
-      </span>
-    </div>
-  );
-}
-
-function TrackHeader({ track, meta, target, logged }) {
-  const style = TRACK_STYLE[track];
-  return (
-    <div className="flex items-center gap-2 mb-2">
-      <span className={clsx("w-7 h-7 rounded-md flex items-center justify-center", style.soft, style.text)}>
-        <Icon name={style.icon} size={16} />
-      </span>
-      <div className="min-w-0">
-        <p className="text-xs font-semibold text-ink/80">{meta.label}</p>
-        <p className="text-[11px] text-ink/45">
-          {logged} / {target} min today
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/** One plan item checked in as a whole (everything except a LeetCode set). The item's own `bar`
- *  (a sprint day's completion standard) overrides the track's default bar. */
-export function PlanItemCard({ meta, item, target, logged, doneKeys, todayLogs, onLog, onUndo, pending }) {
-  const [redo, setRedo] = useState(false);
-  const track = item.track;
-  const barLabel = item.bar ?? meta.bar;
-  const log = todayLogs.find((l) => l.item_key === item.key);
-  const done = doneKeys.includes(item.key) && !redo;
-
-  return (
-    <div className="card p-4 flex flex-col gap-2.5">
-      <TrackHeader track={track} meta={meta} target={target} logged={logged} />
-      <div>
-        <p className="text-sm font-semibold text-ink">{item.title}</p>
-        <p className="text-xs text-ink/65 mt-0.5">{item.brief}</p>
-      </div>
-      <SayItOutLoud text={item.say} />
-      <div className="mt-auto pt-1">
-        {done ? (
-          <DoneLine log={log} barLabel={barLabel} onUndo={onUndo} onRedo={() => setRedo(true)} />
-        ) : (
-          <CheckInForm
-            defaultMinutes={item.minutes}
-            barLabel={barLabel}
-            pending={pending}
-            onSubmit={(values) => {
-              onLog({ track, item_key: item.key, title: item.title, ...values });
-              setRedo(false);
-            }}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** The LeetCode set: each problem checks in on its own, so Easy vs Medium readiness can be tracked. */
-export function LeetCodeCard({ meta, item, target, logged, doneKeys, todayLogs, onLog, onUndo, pending }) {
-  const [redoKeys, setRedoKeys] = useState([]);
-  const perProblem = Math.max(1, Math.round(item.minutes / item.problems.length));
-  const barLabel = item.bar ?? meta.bar;
-
-  return (
-    <div className="card p-4 flex flex-col gap-2.5">
-      <TrackHeader track="leetcode" meta={meta} target={target} logged={logged} />
-      <p className="text-sm font-semibold text-ink">{item.title}</p>
-      <SayItOutLoud text={item.say} />
-      <div className="space-y-3 mt-auto pt-1">
-        {item.problems.map((p) => {
-          const log = todayLogs.find((l) => l.item_key === p.key);
-          const done = doneKeys.includes(p.key) && !redoKeys.includes(p.key);
-          return (
-            <div key={p.key} className="space-y-1.5">
-              <div className="flex items-center gap-2 text-sm">
-                <a
-                  href={p.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 font-medium text-ink hover:text-petrol-500 hover:underline"
-                >
-                  {p.number}. {p.name}
-                  <Icon name="open_in_new" size={13} className="text-ink/40" />
-                </a>
-                <span className={clsx("text-[11px] px-1.5 py-0.5 rounded capitalize", DIFFICULTY_STYLE[p.difficulty])}>
-                  {p.difficulty}
-                </span>
-              </div>
-              {done ? (
-                <DoneLine
-                  log={log}
-                  barLabel={barLabel}
-                  onUndo={onUndo}
-                  onRedo={() => setRedoKeys((keys) => [...keys, p.key])}
-                />
-              ) : (
-                <CheckInForm
-                  defaultMinutes={perProblem}
-                  barLabel={barLabel}
-                  pending={pending}
-                  onSubmit={(values) => {
-                    onLog({
-                      track: "leetcode",
-                      item_key: p.key,
-                      title: `${p.number}. ${p.name}`,
-                      difficulty: p.difficulty,
-                      ...values,
-                    });
-                    setRedoKeys((keys) => keys.filter((k) => k !== p.key));
-                  }}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }

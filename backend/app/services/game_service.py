@@ -20,7 +20,7 @@ from app.models.job import JobAnalysis
 from app.models.network import NetworkContact
 from app.models.practice import PracticeLog
 from app.models.skill_study import SkillStudy
-from app.services import daily_service, posting_check
+from app.services import daily_service, posting_check, practice_quests
 
 XP = {
     "applied": 10,
@@ -29,8 +29,7 @@ XP = {
     "interview": 100,
     "offer": 500,
     "rejected": 5,  # you showed up
-    "practice": 10,
-    "explained": 10,  # on top of "practice", for saying it out loud
+    # Practice pays per quest instead: practice_quests prices each one (10-40) plus an out-loud bonus.
     "chat": 30,
     "outreach": 5,
     "skill": 40,
@@ -78,17 +77,6 @@ def _best_week(days: list[date], n: int) -> date | None:
     return None
 
 
-def _streak_day(days: set[date], n: int) -> date | None:
-    """The last day of the first run of n consecutive practice days."""
-    run, previous = 0, None
-    for d in sorted(days):
-        run = run + 1 if previous and d - previous == timedelta(days=1) else 1
-        previous = d
-        if run == n:
-            return d
-    return None
-
-
 def _prep_items(content: dict) -> int:
     return 3 + len(content.get("star_stories") or []) + len(content.get("system_design") or []) + len(content.get("coding_focus") or [])
 
@@ -105,8 +93,9 @@ async def overview(db: AsyncSession) -> dict:
         days.sort()
 
     logs = (await db.execute(select(PracticeLog))).scalars().all()
-    practice_days = sorted(log.practiced_on for log in logs)
     explained_days = sorted(log.practiced_on for log in logs if log.explained_aloud)
+    training = practice_quests.earned(logs)
+    quest_clear_days = sorted(s["cleared_on"] for s in training["quests"].values())
 
     chat_days, outreach_days = [], []
     for contact in (await db.execute(select(NetworkContact))).scalars():
@@ -130,7 +119,7 @@ async def overview(db: AsyncSession) -> dict:
         "applications": XP["applied"] * len(stage_days["applied"]),
         "moving forward": sum(XP[s] * len(stage_days[s]) for s in ("oa", "phone_screen", "interview", "offer")),
         "showing up after a no": XP["rejected"] * len(stage_days["rejected"]),
-        "practice": XP["practice"] * len(practice_days) + XP["explained"] * len(explained_days),
+        "practice": training["total"],
         "people": XP["chat"] * len(chat_days) + XP["outreach"] * len(outreach_days),
         "skills": XP["skill"] * len(skills_done),
     }
@@ -151,7 +140,7 @@ async def overview(db: AsyncSession) -> dict:
         ("still_here", "Still Here", "Hear 'not this time' 10 times and keep going", "eco", _crossed(stage_days["rejected"], 10)),
         ("coffee", "Coffee Friend", "Have your first coffee chat", "local_cafe", _crossed(chat_days, 1)),
         ("rubber_duck", "Rubber Duck", "Explain 10 practice problems out loud", "record_voice_over", _crossed(explained_days, 10)),
-        ("sunny_week", "Seven Sunny Days", "Practice 7 days in a row", "wb_sunny", _streak_day(set(practice_days), 7)),
+        ("quest_hunter", "Quest Hunter", "Clear 10 training quests", "swords", _crossed(quest_clear_days, 10)),
         ("bookworm", "Bookworm", "Finish a skill on your reading list", "menu_book", _crossed(skills_done, 1)),
     ]
 

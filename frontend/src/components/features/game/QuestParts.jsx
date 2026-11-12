@@ -13,10 +13,10 @@ export const QUESTS = {
     sticker: "bg-petrol-50 text-petrol-600",
   },
   explained: {
-    label: "Explain practice out loud",
+    label: "Clear quests out loud",
     icon: "record_voice_over",
     to: "/practice",
-    xp: "+20 XP each",
+    xp: "each quest's points + its bonus",
     dot: "bg-plum-400",
     sticker: "bg-plum-50 text-plum-600",
   },

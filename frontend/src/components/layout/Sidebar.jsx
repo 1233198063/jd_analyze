@@ -2,7 +2,6 @@ import { NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import Icon from "@/components/common/Icon";
-import { practiceApi } from "@/api/practice";
 import { profileApi } from "@/api/profile";
 
 const nav = [
@@ -13,18 +12,11 @@ const nav = [
   { to: "/tracker", label: "Tracker", icon: "view_kanban" },
   { to: "/resume", label: "Resume", icon: "description" },
   { to: "/gaps", label: "Resume Gaps", icon: "insights" },
-  { to: "/practice", label: "Practice", icon: "fitness_center" },
+  { to: "/practice", label: "Training", icon: "fitness_center" },
   { to: "/network", label: "Networking", icon: "coffee" },
 ];
 
 export default function Sidebar() {
-  // The in-app half of the daily reminder: a dot on Practice until something is logged today.
-  const { data: practice } = useQuery({
-    queryKey: ["practice", "today"],
-    queryFn: practiceApi.today,
-    refetchInterval: 10 * 60 * 1000,
-  });
-  const practicePending = practice?.day_number != null && !practice.checked_in;
   const { data: profile } = useQuery({ queryKey: ["profile"], queryFn: profileApi.get, staleTime: Infinity });
 
   return (
@@ -60,12 +52,6 @@ export default function Sidebar() {
                   className={clsx("w-4 flex-shrink-0", isActive && "text-bubblegum-600")}
                 />
                 {label}
-                {to === "/practice" && practicePending && (
-                  <span
-                    className="ml-auto w-2 h-2 rounded-full bg-bubblegum-500"
-                    title="Not practiced yet today"
-                  />
-                )}
               </>
             )}
           </NavLink>

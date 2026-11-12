@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.practice import PracticeLog, PracticeSettings
+from app.services import practice_quests
 from app.services.practice_plan import ITEM_KEYS, OLD_PLAN_SHARES, TRACKS, compose_plan, item_keys
 
 DEFAULT_DAILY_MINUTES = 90
@@ -263,3 +264,56 @@ def reminder_message(status: dict) -> tuple[str, str]:
     if not plan:
         return title, "Open Offer Coming to log today's practice."
     return title, " · ".join(item["title"] for item in plan["items"])
+
+
+async def quest_board(db: AsyncSession) -> dict:
+    """The practice quest board: every module and quest with its points and whether it's cleared,
+    the points earned so far, and the latest clears. No dates to keep — any quest, any day."""
+    logs = await _all_logs(db)
+    progress = practice_quests.earned(logs)
+    modules = []
+    for module in practice_quests.MODULES:
+        quests = []
+        for q in (q for q in practice_quests.QUESTS if q["module"] == module["key"]):
+            s = progress["quests"].get(q["key"])
+            quests.append({
+                **{k: q.get(k) for k in ("key", "chapter", "title", "topic", "brief", "say", "bar", "minutes",
+                                         "difficulty", "number", "url", "points", "bonus")},
+                "track": q["module"],
+                "cleared_on": s["cleared_on"] if s else None,
+                "explained": bool(s and s["explained"]),
+                "earned": (q["points"] + (q["bonus"] if s["explained"] else 0)) if s else 0,
+                "log_ids": [str(log.id) for log in s["logs"]] if s else [],
+            })
+        chapters = []
+        for name in dict.fromkeys(q["chapter"] for q in quests):
+            in_chapter = [q for q in quests if q["chapter"] == name]
+            opened_on = progress["chests"].get((module["key"], name))
+            chapters.append({
+                "name": name,
+                "total": len(in_chapter),
+                "cleared": sum(1 for q in in_chapter if q["cleared_on"]),
+                "chest": {"bonus": practice_quests.CHEST_BONUS, "opened_on": opened_on},
+            })
+        chest_points = practice_quests.CHEST_BONUS * sum(1 for c in chapters if c["chest"]["opened_on"])
+        modules.append({
+            **module,
+            "goal": TRACKS[module["key"]]["goal"],
+            "quests": quests,
+            "chapters": chapters,
+            "cleared": sum(1 for q in quests if q["cleared_on"]),
+            "earned": sum(q["earned"] for q in quests) + chest_points,
+            "available": sum(q["points"] + q["bonus"] for q in quests) + practice_quests.CHEST_BONUS * len(chapters),
+        })
+    recent = sorted(logs, key=lambda l: (l.practiced_on, l.created_at), reverse=True)[:8]
+    return {
+        "points": progress["total"],
+        "available": sum(m["available"] for m in modules),
+        "cleared": sum(m["cleared"] for m in modules),
+        "total": sum(len(m["quests"]) for m in modules),
+        "stars": sum(1 for m in modules for q in m["quests"] if q["explained"]),
+        "chests": {"opened": len(progress["chests"]), "total": sum(len(m["chapters"]) for m in modules)},
+        "modules": modules,
+        "free": {"points": practice_quests.POINTS["free"], "earned": progress["free"], "sessions": len(progress["free_logs"])},
+        "recent": [{**serialize_log(log), "points": progress["paid"].get(log.id, 0)} for log in recent],
+    }

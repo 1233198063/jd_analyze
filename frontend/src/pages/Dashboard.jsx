@@ -8,7 +8,6 @@ import { profileApi } from "@/api/profile";
 import { practiceApi } from "@/api/practice";
 import JobCard from "@/components/features/JobCard";
 import SeasonRecap from "@/components/features/SeasonRecap";
-import PracticeHeatmap from "@/components/features/practice/PracticeHeatmap";
 import {
   BossBattles,
   PlayerCard,
@@ -19,7 +18,7 @@ import {
 } from "@/components/features/game/HomeSections";
 import { PageLoader } from "@/components/common/Loading";
 import Icon from "@/components/common/Icon";
-import { TRACK_ORDER, TRACK_SHORT, TRACK_STYLE } from "@/utils/practice";
+import { TRACK_STYLE } from "@/utils/practice";
 
 // Search phrases and location come from the user's profile (backend/profile.json).
 function buildSources(phrases, location) {
@@ -148,82 +147,62 @@ function SourcesCard() {
   );
 }
 
-function PracticeCard() {
-  const { data: today } = useQuery({ queryKey: ["practice", "today"], queryFn: practiceApi.today });
-  const { data: overview } = useQuery({ queryKey: ["practice", "overview"], queryFn: practiceApi.overview });
-  if (!today || !overview) return null;
-
-  const tracks = TRACK_ORDER.filter((t) => today.targets[t]);
-  const target = tracks.reduce((sum, t) => sum + today.targets[t], 0);
-  const inPlan = today.day_number != null;
-  const pending = inPlan && !today.checked_in;
-  const plan = today.plan;
+/** Training quests at a glance: points per module and one open quest from each to pick up. */
+function TrainingCard() {
+  const { data: board } = useQuery({ queryKey: ["practice", "quests"], queryFn: practiceApi.quests });
+  if (!board) return null;
+  const picks = board.modules
+    .map((m) => ({ module: m, quest: m.quests.find((q) => !q.cleared_on) }))
+    .filter((p) => p.quest)
+    .slice(0, 3);
 
   return (
     <section>
-      <SectionTitle icon="fitness_center" tone="bg-plum-50 text-plum-700" aside="+10 XP a session, +10 more said out loud">
-        Today's training
+      <SectionTitle icon="fitness_center" tone="bg-plum-50 text-plum-700" aside={`${board.points.toLocaleString()} pts earned · ${board.cleared}/${board.total} quests`}>
+        Training quests
       </SectionTitle>
-    <div className="card rounded-2xl p-5">
-      <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
-        <div>
-          <p className="text-sm font-semibold text-ink">Interview practice</p>
-          <p className="text-xs text-ink/50 mt-0.5">
-            {inPlan ? `Day ${today.day_number} of ${today.plan_days} · ${plan.theme}` : "Outside the practice plan"}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="inline-flex items-center gap-1 text-sm">
-            <Icon name="local_fire_department" size={17} filled className={today.streak ? "text-clay-500" : "text-ink/25"} />
-            <span className="font-semibold text-ink">{today.streak}</span>
-            <span className="text-ink/50">day streak</span>
-          </span>
-          <Link to="/practice" className={pending ? "btn-primary" : "btn-secondary"}>
-            {pending ? "Start today's practice" : "Open practice"}
-          </Link>
-        </div>
-      </div>
-
-      {pending && plan && (
-        <div className="mb-3 rounded-lg bg-bubblegum-100/60 border border-bubblegum-200 px-3 py-2 text-xs text-ink/80 flex items-start gap-2">
-          <Icon name="notifications_active" size={15} className="text-bubblegum-600 mt-px flex-shrink-0" />
-          <span>
-            <span className="font-semibold">Nothing logged yet today.</span> Today's set:{" "}
-            {plan.items.map((item) => item.title).join(" · ")}
-          </span>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-5 items-center">
-        <div className="space-y-1.5">
-          <p className="text-xs text-ink/55">
-            Today · <span className="font-semibold text-ink">{today.total_minutes}</span> / {target} min
-          </p>
-          {tracks.map((t) => (
-            <div key={t} className="flex items-center gap-2 text-xs">
-              <span className="w-24 text-ink/60">{TRACK_SHORT[t]}</span>
-              <div className="flex-1 h-1.5 bg-petrol-50 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${TRACK_STYLE[t].bar}`}
-                  style={{ width: `${Math.min(100, ((today.minutes[t] || 0) / today.targets[t]) * 100)}%` }}
-                />
-              </div>
-              <span className="w-14 text-right tabular-nums text-ink/50">
-                {today.minutes[t] || 0}/{today.targets[t]}
+      <div className="card rounded-2xl p-5">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {board.modules.map((m) => (
+            <Link key={m.key} to={`/practice?module=${m.key}`} className="group">
+              <span className="flex items-center gap-2">
+                <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${TRACK_STYLE[m.key].soft} ${TRACK_STYLE[m.key].text}`}>
+                  <Icon name={m.icon} size={16} />
+                </span>
+                <span className="text-xs font-medium text-ink/75 group-hover:text-petrol-600 leading-tight">{m.title}</span>
               </span>
-            </div>
+              <span className="mt-1.5 block h-1.5 rounded-full bg-petrol-50 overflow-hidden">
+                <span className={`block h-full rounded-full ${TRACK_STYLE[m.key].bar}`} style={{ width: `${(m.earned / m.available) * 100}%` }} />
+              </span>
+              <span className="mt-0.5 block text-[11px] text-ink/45">
+                {m.cleared}/{m.quests.length} · {m.available.toLocaleString()} pts
+              </span>
+            </Link>
           ))}
         </div>
-        <div>
-          <PracticeHeatmap days={overview.days} compact />
-          <p className="text-xs text-ink/40 mt-1.5">
-            Practiced {overview.days_practiced} of {overview.days_elapsed} {overview.days_elapsed === 1 ? "day" : "days"}
-            {overview.explained_rate != null &&
-              ` · explained aloud in ${Math.round(overview.explained_rate * 100)}% of sessions`}
-          </p>
-        </div>
+        {picks.length > 0 && (
+          <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+            {picks.map(({ module, quest }) => (
+              <Link
+                key={quest.key}
+                to={`/practice?module=${module.key}`}
+                className="flex items-center gap-3 rounded-xl border border-mist px-3 py-2 hover:border-bubblegum-300 hover:shadow-sm"
+              >
+                <span className={`flex flex-col items-center rounded-xl px-2 py-1 ${TRACK_STYLE[module.key].soft}`}>
+                  <span className={`font-hand text-2xl leading-none ${TRACK_STYLE[module.key].text}`}>{quest.points}</span>
+                  <span className="text-[9px] uppercase text-ink/45">pts</span>
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm text-ink/80 truncate">{quest.title}</span>
+                  <span className="block text-[11px] text-ink/45">
+                    {module.title} · +{quest.bonus} said out loud
+                  </span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
-    </div>
     </section>
   );
 }
@@ -286,7 +265,7 @@ export default function Dashboard() {
 
       <QuestBoard week={game.week} />
 
-      <PracticeCard />
+      <TrainingCard />
 
       <BossBattles bosses={game.bosses} />
 
