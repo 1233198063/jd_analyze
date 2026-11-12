@@ -8,6 +8,7 @@ from app.models.network import NetworkContact
 from app.models.source_check import SourceCheck
 from app.models.daily import DailyTodo
 from app.models.discovery import DiscoveryRun, DiscoveryCompanyCheck
+from app.models.interview_prep import InterviewPrep
 
 __all__ = [
     "Job", "JobAnalysis", "ResumeMatchScore", "ResumeTailoring",

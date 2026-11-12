@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -22,6 +23,7 @@ from app.schemas.resume import (
 from app.services import job_service, ai_parser, resume_pick, discovery_service, posting_check
 from app.services.skills import normalize_skill_terms
 from app.models.discovery import DiscoveryRun
+from app.models.interview_prep import InterviewPrep
 from app.models.job import Job, ResumeTailoring, ResumeRevision
 
 log = logging.getLogger(__name__)
@@ -55,13 +57,15 @@ async def list_jobs(
     limit: int = 50,
     discovered: bool | None = None,
     max_age_hours: float | None = None,
+    analyzed: bool | None = None,
+    to_apply: bool = False,
     db: AsyncSession = Depends(get_db),
 ):
     posted_after = (
         datetime.now(timezone.utc) - timedelta(hours=max_age_hours) if max_age_hours is not None else None
     )
     jobs = await job_service.list_jobs(
-        db, skip=skip, limit=limit, discovered=discovered, posted_after=posted_after
+        db, skip=skip, limit=limit, discovered=discovered, posted_after=posted_after, analyzed=analyzed, to_apply=to_apply
     )
     result = []
     for job in jobs:
@@ -443,6 +447,85 @@ async def get_cover_letter(job_id: UUID, db: AsyncSession = Depends(get_db)):
         body=letter_data.get("body", ""),
         sign_off=letter_data.get("sign_off", "Sincerely,"),
     )
+
+
+# Stages that unlock the boss-prep checklist. An OA is a coding test, not a conversation.
+INTERVIEW_STAGES = {"phone_screen", "interview"}
+
+
+def _prep_out(prep: InterviewPrep | None) -> dict | None:
+    if prep is None:
+        return None
+    return {"content": prep.content, "checked": prep.checked or [], "created_at": prep.created_at, "updated_at": prep.updated_at}
+
+
+async def _get_prep(db: AsyncSession, job_id: UUID) -> InterviewPrep | None:
+    return await db.scalar(select(InterviewPrep).where(InterviewPrep.job_id == job_id))
+
+
+@router.get("/{job_id}/interview-prep")
+async def get_interview_prep(job_id: UUID, db: AsyncSession = Depends(get_db)):
+    return _prep_out(await _get_prep(db, job_id))
+
+
+@router.post("/{job_id}/interview-prep")
+async def generate_interview_prep(job_id: UUID, db: AsyncSession = Depends(get_db)):
+    """Build (or rebuild) the boss-prep checklist with Codex. Uses the resume text actually sent to
+    this company when the application recorded it, so the stories match what the interviewer read."""
+    job = await job_service.get_job_detail(db, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not (job.raw_text or "").strip():
+        raise HTTPException(status_code=400, detail="No job description saved for this job — paste it on Add JD first")
+    application = job.application
+    if not application or application.status.value not in INTERVIEW_STAGES:
+        raise HTTPException(status_code=400, detail="Unlocks once the application reaches a phone screen or interview")
+
+    resume_text = application.resume_snapshot
+    if not resume_text:
+        resume = await job_service.resume_for_job(db, job)
+        resume_text = resume.raw_text if resume else None
+    if not resume_text:
+        raise HTTPException(status_code=400, detail="No resume on record for this application")
+
+    def present(value: str | None) -> str | None:
+        return value if value and value.strip().lower() != "null" else None
+
+    try:
+        content = await asyncio.to_thread(
+            ai_parser.generate_interview_prep,
+            resume_text=resume_text,
+            company_name=present(job.analysis and job.analysis.company_name) or present(job.company_name) or "the company",
+            title=present(job.analysis and job.analysis.title) or present(job.title) or "Software Engineer",
+            job_text=job.raw_text,
+            stage=application.status.value,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {e}")
+
+    prep = await _get_prep(db, job_id) or InterviewPrep(job_id=job_id)
+    prep.content, prep.checked = content, []
+    db.add(prep)
+    await db.flush()
+    await db.refresh(prep)
+    return _prep_out(prep)
+
+
+class InterviewPrepUpdate(BaseModel):
+    checked: list[str]
+
+
+@router.patch("/{job_id}/interview-prep")
+async def update_interview_prep(job_id: UUID, payload: InterviewPrepUpdate, db: AsyncSession = Depends(get_db)):
+    """Save which checklist items are done."""
+    prep = await _get_prep(db, job_id)
+    if not prep:
+        raise HTTPException(status_code=404, detail="No prep checklist for this job yet")
+    prep.checked = list(dict.fromkeys(payload.checked))
+    db.add(prep)
+    await db.flush()
+    await db.refresh(prep)
+    return _prep_out(prep)
 
 
 @router.post("/{job_id}/interview-answer", response_model=InterviewAnswerOut)

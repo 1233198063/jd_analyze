@@ -30,6 +30,26 @@ async def daily_history(days: int = Query(14, ge=1, le=90), db: AsyncSession = D
     return await daily_service.history(db, days)
 
 
+@router.get("/week")
+async def daily_week(db: AsyncSession = Depends(get_db)):
+    """This week's quest board: applications, explained-aloud practice and coffee chats vs targets."""
+    return await daily_service.week_quests(db)
+
+
+@router.get("/season")
+async def daily_season(
+    month: str = Query(..., pattern=r"^\d{4}-\d{2}$", description="YYYY-MM"),
+    db: AsyncSession = Depends(get_db),
+):
+    """A month in review for the end-of-month recap card."""
+    try:
+        first = date.fromisoformat(f"{month}-01")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="month must be YYYY-MM")
+    return await daily_service.season(db, first)
+
+
+# Declared after /week and /season: a path parameter typed as a date would otherwise claim them.
 @router.get("/{day}")
 async def daily_view(day: date, db: AsyncSession = Depends(get_db)):
     """One day's to-dos plus the applications, JDs and practice the app recorded that day."""

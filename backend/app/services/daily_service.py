@@ -11,13 +11,17 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.profile import profile
 from app.models.application import Application
 from app.models.daily import DailyTodo
 from app.models.job import Job, JobAnalysis
+from app.models.network import NetworkContact
 from app.models.practice import PracticeLog
+from app.models.skill_study import SkillStudy
+from app.services import network_service
 
 # Timeline steps worth showing as progress; "saved" is just bookmarking and "applied" has its own list.
 PROGRESS_STATUSES = {"referral_asked", "oa", "phone_screen", "interview", "offer", "rejected", "withdrawn"}
@@ -149,3 +153,94 @@ async def history(db: AsyncSession, days: int) -> list[dict]:
         summary[log.practiced_on]["practice_minutes"] += log.minutes
 
     return [{"day": d, **counts} for d, counts in summary.items()]
+
+
+# Weekly quest board. Each goal counts something the user controls (sending, practicing, talking
+# to people) rather than outcomes, which take weeks and aren't up to them. profile.weekly_targets
+# overrides any of these.
+DEFAULT_WEEKLY_TARGETS = {
+    "applications": 10,  # a steady pace that is still reachable in a busy week
+    "explained": 5,  # practice items explained out loud — one per weekday
+    "chats": network_service.WEEKLY_CHAT_TARGET,
+}
+
+
+async def week_quests(db: AsyncSession, today: date | None = None) -> dict:
+    """This week's (Monday-start) applications, explained-aloud practice and coffee chats vs targets."""
+    today = today or date.today()
+    week_start = today - timedelta(days=today.weekday())
+    targets = {**DEFAULT_WEEKLY_TARGETS, **(profile.weekly_targets or {})}
+
+    applied = sum(1 for e in await _timeline_events(db, week_start, today) if e["status"] == "applied")
+    explained = (
+        await db.execute(
+            select(func.count()).select_from(PracticeLog).where(
+                PracticeLog.practiced_on >= week_start, PracticeLog.practiced_on <= today, PracticeLog.explained_aloud
+            )
+        )
+    ).scalar_one()
+    contacts = (await db.execute(select(NetworkContact))).scalars().all()
+    chats = network_service.week_counts(list(contacts), today)["chats"]
+
+    return {
+        "week_start": week_start,
+        "week_end": week_start + timedelta(days=6),
+        "days_left": 6 - today.weekday(),
+        "quests": [
+            {"key": "applications", "done": applied, "target": targets["applications"]},
+            {"key": "explained", "done": explained, "target": targets["explained"]},
+            {"key": "chats", "done": chats, "target": targets["chats"]},
+        ],
+    }
+
+
+# Timeline steps that moved an application forward, in the order a season recap lists them.
+ADVANCE_STATUSES = ["oa", "phone_screen", "interview", "offer"]
+
+
+async def season(db: AsyncSession, month: date) -> dict:
+    """One calendar month in review: what was sent, how far things got, what was learned, who was met."""
+    start = month.replace(day=1)
+    end = (start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+
+    events = await _timeline_events(db, start, end)
+    labels = await _job_labels(db, {e["job_id"] for e in events})
+    applied_ids = list(dict.fromkeys(e["job_id"] for e in sorted(events, key=lambda e: e["at"]) if e["status"] == "applied"))
+    advanced = sorted((e for e in events if e["status"] in ADVANCE_STATUSES), key=lambda e: e["at"])
+
+    jds_added = sum(1 for (created,) in await db.execute(select(Job.created_at)) if start <= _local(created).date() <= end)
+    logs = (
+        await db.execute(select(PracticeLog).where(PracticeLog.practiced_on >= start, PracticeLog.practiced_on <= end))
+    ).scalars().all()
+    studies = (await db.execute(select(SkillStudy))).scalars().all()
+
+    def in_month(ts: datetime | None) -> bool:
+        return ts is not None and start <= _local(ts).date() <= end
+
+    chats = []
+    for contact in (await db.execute(select(NetworkContact))).scalars():
+        for event in contact.timeline or []:
+            try:
+                on = date.fromisoformat(event["date"])
+            except (KeyError, ValueError):
+                continue
+            if event.get("type") == "chat" and start <= on <= end:
+                chats.append({"name": contact.name, "company": contact.company, "role": contact.role, "date": on})
+
+    return {
+        "month": start.strftime("%Y-%m"),
+        "start": start,
+        "end": end,
+        "applied": [{"job_id": str(job_id), **labels.get(job_id, {})} for job_id in applied_ids],
+        "advanced": [{"job_id": str(e["job_id"]), "status": e["status"], "at": e["at"], **labels.get(e["job_id"], {})} for e in advanced],
+        "rejections": sum(1 for e in events if e["status"] == "rejected"),
+        "jds_added": jds_added,
+        "practice": {
+            "days": len({log.practiced_on for log in logs}),
+            "minutes": sum(log.minutes for log in logs),
+            "explained": sum(1 for log in logs if log.explained_aloud),
+        },
+        "skills_finished": sorted(s.skill for s in studies if in_month(s.finished_at)),
+        "skills_started": sorted(s.skill for s in studies if in_month(s.started_at) and not s.finished_at),
+        "chats": sorted(chats, key=lambda c: c["date"]),
+    }

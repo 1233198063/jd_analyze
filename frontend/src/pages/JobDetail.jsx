@@ -11,6 +11,7 @@ import { readResumeDraft } from "@/components/features/ResumeEditExport";
 import InterviewAnswerPanel from "@/components/features/InterviewAnswerPanel";
 import CoverLetterEditor from "@/components/features/CoverLetterEditor";
 import ApplicationTimeline from "@/components/features/ApplicationTimeline";
+import BossPrep, { BOSS_STAGES } from "@/components/features/BossPrep";
 import Icon from "@/components/common/Icon";
 import Badge, { SponsorBadge, LevelBadge, RecommendationBadge, RegionBadge, PoolBadge } from "@/components/common/Badge";
 import clsx from "clsx";
@@ -604,6 +605,14 @@ export default function JobDetail() {
 
       {/* Application timeline */}
       {job.application_id && <ApplicationTimeline applicationId={job.application_id} />}
+
+      {BOSS_STAGES.has(job.application_status) && (
+        <BossPrep
+          jobId={jobId}
+          stage={job.application_status}
+          company={present(analysis?.company_name) || present(job.company_name) || "this company"}
+        />
+      )}
 
       {/* Application link */}
       <div className="card p-4">

@@ -52,4 +52,8 @@ export const jobsApi = {
   // Is the posting still up? Asks the job board directly (no AI). Returns the full job detail.
   checkPosting: (id) => client.post(`/jobs/${id}/check-posting`).then((r) => r.data),
   checkPostings: () => client.post("/jobs/check-postings").then((r) => r.data),
+  // Boss-prep checklist, unlocked at a phone screen / interview. Generating takes one Codex call (~1 min).
+  getInterviewPrep: (id) => client.get(`/jobs/${id}/interview-prep`).then((r) => r.data),
+  generateInterviewPrep: (id) => client.post(`/jobs/${id}/interview-prep`).then((r) => r.data),
+  updateInterviewPrep: (id, checked) => client.patch(`/jobs/${id}/interview-prep`, { checked }).then((r) => r.data),
 };

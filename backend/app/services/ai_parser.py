@@ -218,6 +218,55 @@ Return JSON only:
 }}"""
 
 
+INTERVIEW_PREP_PROMPT = """You are preparing {candidate} for an upcoming {stage} with one \
+specific company. Build a short, practical prep checklist from ONLY the job description and the \
+resume below — the resume is the exact one they sent this company.
+
+JOB:
+Company: {company_name}
+Title: {title}
+
+FULL JOB DESCRIPTION:
+{job_text}
+
+RESUME (as sent):
+{resume_text}
+
+Rules — these matter more than polish:
+- Company facts come ONLY from the job description. Don't add funding, news, size, or products the \
+JD doesn't state. If the JD says little, give fewer facts rather than guessing.
+- STAR stories must each rest on ONE line copied word for word from the resume ("resume_line"). \
+Situation / Task / Action / Result may only restate what that line and its role header say. Any \
+detail an interviewer will probe that the resume doesn't state (team size, a conflict, what went \
+wrong, who decided) goes into "fill_in" as a question for the candidate to answer from memory — \
+never invent it. Keep every number exactly as the resume states it.
+- Pick the stories that answer what THIS JD asks for; name the JD requirement each one answers.
+- System design questions should be the ones this team would plausibly ask given the product and \
+stack the JD describes (for a frontend / full-stack role, frontend system design: component \
+architecture, data fetching and caching, real-time updates, performance, error states). For a \
+phone screen, give at most 1.
+- Coding focus: the 3-5 topics the JD's stack and level make likely (e.g. "React state + effects \
+under a timer", "array/hash-map problems at LeetCode medium").
+- Questions to ask the interviewer: specific to what the JD says about the team and product.
+- Plain English, short sentences, no clichés.
+
+Return JSON only:
+{{
+  "company_brief": ["3-5 short facts from the JD: what they build, for whom, what this team owns"],
+  "why_company": "60-90 words, first person, a spoken answer to 'why us' grounded in the JD and the resume",
+  "star_stories": [
+    {{"requirement": "the JD phrase this answers", "resume_line": "exact resume line",
+      "situation": "...", "task": "...", "action": "...", "result": "...",
+      "fill_in": "what the candidate should recall before the interview"}}
+  ],
+  "system_design": [
+    {{"question": "...", "why_likely": "the JD detail that makes it likely", "key_points": ["4-6 points to cover"]}}
+  ],
+  "coding_focus": ["..."],
+  "questions_to_ask": ["3 questions"]
+}}"""
+
+
 APPLICATION_ANALYSIS_PROMPT = """You are a candid job-search coach reviewing one candidate's \
 application outcomes. {candidate_sentence} Everything below was computed from their own application tracker — \
 reason ONLY from it.
@@ -622,3 +671,28 @@ def generate_interview_answer(
         ),
     )
     return json.loads(raw)
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+def generate_interview_prep(resume_text: str, company_name: str, title: str, job_text: str, stage: str) -> dict:
+    raw = _call(
+        INTERVIEW_PREP_PROMPT.format(
+            **profile.prompt_context(),
+            stage="phone screen" if stage == "phone_screen" else "interview",
+            company_name=company_name,
+            title=title,
+            job_text=(job_text or "(not available)")[:9000],
+            resume_text=resume_text[:8000],
+        ),
+    )
+    data = json.loads(raw)
+    # A story whose "resume line" isn't actually on the resume is the one way this could put an
+    # invented accomplishment in the candidate's mouth — flag it rather than trust it.
+    resume_flat = " ".join(resume_text.split()).lower()
+    for story in data.get("star_stories") or []:
+        line = " ".join((story.get("resume_line") or "").split()).lower().strip(" -–•")
+        story["line_verified"] = bool(line) and line in resume_flat
+    data["new_numbers"] = find_new_numbers(
+        resume_text, " ".join(f"{s.get('situation')} {s.get('task')} {s.get('action')} {s.get('result')}" for s in data.get("star_stories") or [])
+    )
+    return data

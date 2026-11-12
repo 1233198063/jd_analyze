@@ -58,6 +58,9 @@ class Profile(BaseModel):
     # Where discovery looks: "target" = your target_locations plus US-remote roles; "us" = anywhere in the US.
     discovery_locations: Literal["target", "us"] = "target"
     amazon_queries: Optional[list[str]] = None
+    # Dashboard weekly quest board, e.g. {"applications": 15}; keys left out keep the defaults
+    # (applications 10, explained-aloud practice 5, coffee chats 2).
+    weekly_targets: Optional[dict[str, int]] = None
     search_phrases: Optional[list[str]] = None
     search_location: str = "Bay Area"
 

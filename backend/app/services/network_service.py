@@ -84,7 +84,7 @@ def apply_stage(contact: NetworkContact, stage: str, today: date, follow_up_give
         contact.next_follow_up = None
 
 
-def _week_counts(contacts: list[NetworkContact], today: date) -> dict:
+def week_counts(contacts: list[NetworkContact], today: date) -> dict:
     week_start = today - timedelta(days=today.weekday())  # Monday
     outreach = chats = 0
     for contact in contacts:
@@ -160,7 +160,7 @@ async def overview(db: AsyncSession) -> dict:
         "today": today,
         "contacts": [serialize(c) for c in contacts],
         "due_ids": [str(c.id) for c in due],
-        "week": _week_counts(list(contacts), today),
+        "week": week_counts(list(contacts), today),
         "pipeline_gaps": await _pipeline_gaps(db, list(contacts)),
         "toolkit": toolkit(),
     }
