@@ -64,3 +64,6 @@ desktop.ini
 
 # Personal profile (name, school, visa situation, practice sprint) — never committed
 backend/profile.json
+
+# Local database backups (personal data)
+backend/backups/

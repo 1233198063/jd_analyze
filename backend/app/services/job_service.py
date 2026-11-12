@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.models.job import Job, JobAnalysis, ResumeMatchScore, ResumeTailoring, JobSource, SponsorshipStatus, JobLevel, Recommendation
+from app.models.application import Application, ApplicationStatus
 from app.models.company import Company
 from app.models.resume import Resume
 from app.schemas.job import JobCreate
@@ -345,6 +346,8 @@ async def list_jobs(
     limit: int = 50,
     discovered: bool | None = None,
     posted_after: datetime | None = None,
+    analyzed: bool | None = None,
+    to_apply: bool = False,
 ) -> list[Job]:
     query = (
         select(Job)
@@ -361,6 +364,22 @@ async def list_jobs(
         query = query.where(Job.discovered == discovered)
     if posted_after is not None:
         query = query.where(Job.posted_at >= posted_after)
+    if analyzed is not None:
+        # Applications imported from an outside log have no AI analysis or score; JD lists
+        # leave them out, the tracker still shows them.
+        query = query.where(Job.analysis.has() if analyzed else ~Job.analysis.has())
+    if to_apply:
+        # The next things worth sending: scored Apply/Maybe, not applied yet (or only saved), and
+        # not a posting the open-check found closed — best score first.
+        query = (
+            query.join(ResumeMatchScore, ResumeMatchScore.job_id == Job.id)
+            .where(ResumeMatchScore.is_auto_rejected.is_(False))
+            .where(ResumeMatchScore.recommendation.in_([Recommendation.apply, Recommendation.maybe]))
+            .where(~Job.application.has() | Job.application.has(Application.status == ApplicationStatus.saved))
+            .where(Job.posting_status.is_(None) | (Job.posting_status != "removed"))
+            .order_by(None)
+            .order_by(ResumeMatchScore.overall_score.desc())
+        )
     result = await db.execute(query)
     return list(result.scalars().all())
 
