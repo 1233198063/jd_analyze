@@ -67,3 +67,25 @@
 .score-ring-animate {
   animation: ring-fill 0.8s ease-out forwards;
 }
+
+/* Quests page: a plant that sways, bosses that bob, stamps that land. Decoration only, so all of
+   it switches off for anyone who asks the OS for less motion. */
+@keyframes sway {
+  0%, 100% { transform: rotate(-2deg); }
+  50% { transform: rotate(2deg); }
+}
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@keyframes stamp-pop {
+  0% { transform: scale(1.6) rotate(-12deg); opacity: 0; }
+  70% { transform: scale(0.95) rotate(-12deg); opacity: 1; }
+  100% { transform: scale(1) rotate(-12deg); opacity: 1; }
+}
+.animate-sway { animation: sway 4s ease-in-out infinite; transform-origin: 50% 100%; transform-box: fill-box; }
+.animate-bob { animation: bob 2.6s ease-in-out infinite; }
+.animate-stamp { animation: stamp-pop 0.45s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-sway, .animate-bob, .animate-stamp { animation: none; }
+}

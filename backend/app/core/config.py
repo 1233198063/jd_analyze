@@ -93,7 +93,8 @@ class Settings(BaseSettings):
     # that phrasing is reliable in a *title* but not in body text, where only an
     # unambiguous eligibility-window statement should trigger a reject.
     NEW_GRAD_ONLY_TITLE_PATTERNS: List[str] = [
-        "new grad", "new college graduate", "recent graduate", "recent college graduate",
+        "new grad", "new college grad", "recent graduate", "recent college graduate",
+        "phd intern", "phd student",  # internships for enrolled PhD students
         "university graduate", "campus hire", "campus recruiting",
         "rotational program", "early career program", "early talent program",
         "university program", "college hire",

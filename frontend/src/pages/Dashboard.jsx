@@ -2,12 +2,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import dayjs from "dayjs";
 import { jobsApi } from "@/api/jobs";
+import { gameApi } from "@/api/game";
 import { sourcesApi } from "@/api/sources";
 import { profileApi } from "@/api/profile";
-import { applicationsApi } from "@/api/applications";
 import { practiceApi } from "@/api/practice";
 import JobCard from "@/components/features/JobCard";
+import SeasonRecap from "@/components/features/SeasonRecap";
 import PracticeHeatmap from "@/components/features/practice/PracticeHeatmap";
+import {
+  BossBattles,
+  PlayerCard,
+  QuestBoard,
+  SeasonLinks,
+  SectionTitle,
+  StickerWall,
+} from "@/components/features/game/HomeSections";
 import { PageLoader } from "@/components/common/Loading";
 import Icon from "@/components/common/Icon";
 import { TRACK_ORDER, TRACK_SHORT, TRACK_STYLE } from "@/utils/practice";
@@ -101,9 +110,12 @@ function SourcesCard() {
   if (!profile) return null;
   const { urlSources, textOnlySources } = buildSources(profile.search_phrases, profile.search_location);
   return (
-    <div className="card p-5">
-      <p className="text-sm font-semibold text-ink mb-1">Search by Source</p>
-      <p className="text-xs text-ink/40 mb-3">
+    <section>
+      <SectionTitle icon="travel_explore" tone="bg-clay-50 text-clay-700">
+        Find new quests
+      </SectionTitle>
+      <div className="card rounded-2xl p-5">
+      <p className="text-xs text-ink/45 mb-3">
         Opens a search on that site for your target roles — copy any posting's URL or text back into "Analyze JD".
       </p>
       <div className="space-y-3">
@@ -131,7 +143,8 @@ function SourcesCard() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </section>
   );
 }
 
@@ -147,10 +160,14 @@ function PracticeCard() {
   const plan = today.plan;
 
   return (
-    <div className="card p-5">
+    <section>
+      <SectionTitle icon="fitness_center" tone="bg-plum-50 text-plum-700" aside="+10 XP a session, +10 more said out loud">
+        Today's training
+      </SectionTitle>
+    <div className="card rounded-2xl p-5">
       <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
         <div>
-          <p className="text-sm font-semibold text-ink">Interview Practice</p>
+          <p className="text-sm font-semibold text-ink">Interview practice</p>
           <p className="text-xs text-ink/50 mt-0.5">
             {inPlan ? `Day ${today.day_number} of ${today.plan_days} · ${plan.theme}` : "Outside the practice plan"}
           </p>
@@ -207,123 +224,112 @@ function PracticeCard() {
         </div>
       </div>
     </div>
+    </section>
   );
 }
 
-function StatCard({ label, value, sub, color = "petrol" }) {
-  const colors = {
-    petrol: "text-petrol-500",
-    green: "text-sage-700",
-    yellow: "text-gold-700",
-    red: "text-coral-700",
-  };
+function greeting() {
+  const hour = dayjs().hour();
+  return hour < 5 ? "Still up" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+}
+
+function JobGrid({ jobs }) {
   return (
-    <div className="card p-5">
-      <p className="text-sm text-ink/50">{label}</p>
-      <p className={`text-3xl font-bold mt-1 ${colors[color]}`}>{value}</p>
-      {sub && <p className="text-xs text-ink/40 mt-0.5">{sub}</p>}
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+      {jobs.map((job) => (
+        <JobCard key={job.id} job={job} />
+      ))}
     </div>
   );
 }
 
+/**
+ * Home: the job hunt as a small game — your plant and level, this week's quests, today's
+ * training, bosses, the next targets, stickers — with the JD tools underneath.
+ */
 export default function Dashboard() {
-  const { data: jobs = [], isLoading } = useQuery({
-    queryKey: ["jobs"],
-    queryFn: () => jobsApi.list({ limit: 50 }),
+  const { data: game, isLoading } = useQuery({ queryKey: ["game"], queryFn: gameApi.overview });
+  const { data: profile } = useQuery({ queryKey: ["profile"], queryFn: profileApi.get, staleTime: Infinity });
+  const { data: targets = [] } = useQuery({
+    queryKey: ["jobs", "to-apply"],
+    queryFn: () => jobsApi.list({ to_apply: true, limit: 6 }),
+  });
+  // Hard-rejected JDs stay in Discoveries and on their own pages; home shows ones still in play.
+  const { data: recent = [] } = useQuery({
+    queryKey: ["jobs", "recent"],
+    queryFn: () => jobsApi.list({ limit: 24, analyzed: true }),
+    select: (jobs) => jobs.filter((j) => !j.is_auto_rejected).slice(0, 6),
   });
 
-  const { data: kanban = [] } = useQuery({
-    queryKey: ["kanban"],
-    queryFn: applicationsApi.kanban,
-  });
-
-  const stats = {
-    total: jobs.length,
-    apply: jobs.filter((j) => j.recommendation === "apply").length,
-    maybe: jobs.filter((j) => j.recommendation === "maybe").length,
-    rejected: jobs.filter((j) => j.is_auto_rejected).length,
-  };
-
-  const applied = kanban.find((col) => col.status === "applied")?.items?.length ?? 0;
-  const interviews = kanban.find((col) => col.status === "interview")?.items?.length ?? 0;
-
-  const prioritized = jobs
-    .filter((j) => !j.is_auto_rejected && j.overall_score >= 60 && j.posting_status !== "removed")
-    .sort((a, b) => (b.overall_score ?? 0) - (a.overall_score ?? 0))
-    .slice(0, 6);
-
-  const recent = [...jobs].slice(0, 8);
-
-  if (isLoading) return <PageLoader message="Loading dashboard..." />;
+  if (isLoading || !game) return <PageLoader message="Watering your plant..." />;
+  const firstName = (profile?.name || "").split(" ")[0];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8">
+      <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-ink">Dashboard</h1>
-          <p className="text-sm text-ink/50 mt-0.5">Your job search intelligence overview</p>
+          <p className="font-hand text-2xl leading-none text-bubblegum-500">{dayjs().format("dddd, MMMM D")}</p>
+          <h1 className="text-2xl font-bold text-ink mt-1">
+            {greeting()}
+            {firstName ? `, ${firstName}` : ""}
+          </h1>
+          <p className="text-sm text-ink/50 mt-0.5">One small quest at a time.</p>
         </div>
         <Link to="/jobs/add" className="btn-primary">
-          + Analyze JD
+          <Icon name="add" size={18} /> Analyze JD
         </Link>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-        <StatCard label="Total JDs" value={stats.total} color="petrol" />
-        <StatCard label="Apply" value={stats.apply} sub="75+ score" color="green" />
-        <StatCard label="Maybe" value={stats.maybe} sub="60–74 score" color="yellow" />
-        <StatCard label="Auto Rejected" value={stats.rejected} sub="hard filters" color="red" />
-        <StatCard label="Applied" value={applied} color="petrol" />
-        <StatCard label="Interviews" value={interviews} color="green" />
-      </div>
+      <SeasonRecap />
+
+      <PlayerCard player={game.player} stats={game.stats} />
+
+      <QuestBoard week={game.week} />
 
       <PracticeCard />
 
-      <SourcesCard />
+      <BossBattles bosses={game.bosses} />
 
-      {/* Top priority jobs */}
-      {prioritized.length > 0 && (
-        <section>
-          <h2 className="text-base font-semibold text-ink mb-3">
-            Priority Applications
-            <span className="ml-2 text-xs font-normal text-ink/40">score 60+</span>
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {prioritized.map((job) => (
-              <JobCard key={job.id} job={job} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Recent */}
-      {recent.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-ink">Recent JDs</h2>
-            <span className="text-xs text-ink/40">{jobs.length} total</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {recent.map((job) => (
-              <JobCard key={job.id} job={job} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {jobs.length === 0 && (
-        <div className="card p-12 text-center">
-          <Icon name="dashboard" size={40} className="mb-3 text-petrol-500" />
-          <p className="font-medium text-ink">No jobs analyzed yet</p>
-          <p className="text-sm text-ink/50 mt-1 mb-4">
-            Paste a JD or drop a Greenhouse / Lever / Ashby link to get started
+      <section id="next-targets">
+        <SectionTitle
+          icon="flag"
+          tone="bg-bubblegum-50 text-bubblegum-700"
+          aside={game.stats.to_apply ? `top ${targets.length} of ${game.stats.to_apply} still open and not sent` : undefined}
+        >
+          Next targets
+        </SectionTitle>
+        {targets.length ? (
+          <JobGrid jobs={targets} />
+        ) : (
+          <p className="rounded-2xl border border-dashed border-mist p-5 text-sm text-ink/50">
+            Nothing waiting — every good match is sent. Discoveries or a new JD will refill this.
           </p>
+        )}
+      </section>
+
+      <StickerWall achievements={game.achievements} />
+
+      {recent.length > 0 ? (
+        <section>
+          <SectionTitle icon="history" aside={`${game.stats.jds_analyzed} analyzed`}>
+            Recent JDs
+          </SectionTitle>
+          <JobGrid jobs={recent} />
+        </section>
+      ) : (
+        <div className="card rounded-2xl p-12 text-center">
+          <Icon name="note_add" size={40} className="mb-3 text-petrol-500" />
+          <p className="font-medium text-ink">No jobs analyzed yet</p>
+          <p className="text-sm text-ink/50 mt-1 mb-4">Paste a JD or drop a Greenhouse / Lever / Ashby link to get started</p>
           <Link to="/jobs/add" className="btn-primary">
             Analyze your first JD
           </Link>
         </div>
       )}
+
+      <SourcesCard />
+
+      <SeasonLinks seasons={game.seasons} />
     </div>
   );
 }

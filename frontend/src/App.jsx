@@ -30,6 +30,7 @@ export default function App() {
           {/* GHC 26 was cancelled; its page became Networking. */}
           <Route path="/ghc" element={<Navigate to="/network" replace />} />
           <Route path="/today" element={<DailyLog />} />
+          <Route path="/quests" element={<Navigate to="/" replace />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
